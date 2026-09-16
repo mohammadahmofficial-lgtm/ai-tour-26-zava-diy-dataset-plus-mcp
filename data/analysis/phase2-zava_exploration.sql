@@ -8,11 +8,13 @@ FROM retail.stores;
 -- =========================================================
 -- Query 2: Total sales performance by year
 -- Question: Did sales really fall in 2023, and by how much?
+-- Sales measure: order_items.total_amount
 -- =========================================================
+
 SELECT
     EXTRACT(YEAR FROM o.order_date) AS year,
     COUNT(DISTINCT o.order_id) AS total_orders,
-    ROUND(SUM(oi.quantity * oi.unit_price), 2) AS total_sales
+    ROUND(SUM(oi.total_amount), 2) AS total_sales
 FROM retail.orders o
 JOIN retail.order_items oi
     ON o.order_id = oi.order_id
@@ -21,26 +23,32 @@ ORDER BY year;
 
 -- Result:
 -- Company sales fell in 2023 compared with 2022.
--- Sales declined by approximately 3.61%, while order volume declined by 3.80%.
+-- Total sales declined from $6,441,413.26 in 2022
+-- to $6,209,863.44 in 2023, a decrease of
+-- $231,549.82 (approximately 3.59%).
+-- Order volume declined from 27,565 to 26,517,
+-- a decrease of approximately 3.80%.
 
 
 -- =========================================================
 -- Query 3: Compare store sales between 2022 and 2023
 -- Question: Which stores contributed most to the 2023 decline?
+-- Sales measure: order_items.total_amount
 -- =========================================================
+
 WITH store_sales AS (
     SELECT
         s.store_name,
 
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2022
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END) AS sales_2022,
 
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2023
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END) AS sales_2023
 
@@ -68,8 +76,13 @@ FROM store_sales
 ORDER BY sales_change ASC;
 
 -- Result:
--- Online, Seattle and Bellevue were the largest contributors
--- to the 2023 sales decline.
+-- Zava Retail Online, Seattle, and Bellevue were the largest
+-- contributors to the 2023 sales decline.
+-- Online declined by $92,917.14 (-5.15%),
+-- Seattle declined by $82,833.21 (-4.68%),
+-- and Bellevue declined by $61,353.78 (-5.15%).
+-- Redmond showed the strongest growth, increasing by
+-- $22,987.25 (+13.72%).
 
 
 -- =========================================================
@@ -81,26 +94,26 @@ SELECT
 
     ROUND(SUM(CASE
         WHEN EXTRACT(YEAR FROM o.order_date) = 2022
-        THEN oi.quantity * oi.unit_price
+        THEN oi.total_amount
         ELSE 0
     END), 2) AS sales_2022,
 
     ROUND(SUM(CASE
         WHEN EXTRACT(YEAR FROM o.order_date) = 2023
-        THEN oi.quantity * oi.unit_price
+        THEN oi.total_amount
         ELSE 0
     END), 2) AS sales_2023,
 
     ROUND(
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2023
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END)
         -
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2022
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END),
         2
@@ -116,7 +129,9 @@ GROUP BY EXTRACT(MONTH FROM o.order_date)
 ORDER BY month;
 
 -- Result:
--- Sales fell in 2023 for every month except January.
+-- Sales fell in 2023 for 11 of 12 months.
+-- January was the only month with an increase.
+-- The largest declines were in February, May and December.
 
 
 -- =========================================================
@@ -147,13 +162,13 @@ WITH category_sales AS (
 
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2022
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END) AS sales_2022,
 
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2023
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END) AS sales_2023
 
@@ -181,17 +196,16 @@ SELECT
     ) AS percentage_change
 FROM category_sales
 ORDER BY sales_change ASC;
-
 -- Result:
 -- Sales declined in 8 of 9 categories in 2023.
--- Power Tools had the largest dollar decline (-$112,071, -4.66%).
--- Lumber & Building Materials had the largest percentage decline (-9.75%).
--- Hand Tools was the only category that increased (+1.49%).
-
+-- Power Tools had the largest dollar decline (-$112,155.24).
+-- Lumber & Building Materials had the largest percentage decline (-9.90%).
+-- Hand Tools was the only category to increase (+1.11%).
 
 -- =========================================================
 -- Query 6: Power Tools sales by store, 2022 vs 2023
 -- Question: Was the Power Tools decline concentrated in particular stores?
+-- Sales measure: order_items.total_amount
 -- =========================================================
 WITH store_category_sales AS (
     SELECT
@@ -199,13 +213,13 @@ WITH store_category_sales AS (
 
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2022
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END) AS sales_2022,
 
         SUM(CASE
             WHEN EXTRACT(YEAR FROM o.order_date) = 2023
-            THEN oi.quantity * oi.unit_price
+            THEN oi.total_amount
             ELSE 0
         END) AS sales_2023
 
@@ -239,10 +253,9 @@ ORDER BY sales_change ASC;
 
 -- Result:
 -- The Power Tools decline was concentrated mainly in Seattle,
--- Bellevue, Online and Tacoma.
--- Seattle had the largest dollar decline (-$58,186).
--- Power Tools grew strongly in Redmond (+24.86%),
--- Spokane (+23.08%) and Everett (+9.96%).
+-- Bellevue, Tacoma and Online.
+-- Seattle had the largest dollar decline (-$58,812.44).
+-- Power Tools grew in Spokane, Redmond and Everett.
 
 -- =========================================================
 -- Query 7: Inspect inventory table structure
