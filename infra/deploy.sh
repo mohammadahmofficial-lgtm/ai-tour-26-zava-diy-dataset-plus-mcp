@@ -87,7 +87,7 @@ fi
 # Write to the workshop .env file
 {
   echo "PROJECT_ENDPOINT=$PROJECTS_ENDPOINT"
-  echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
+  echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-5.4-mini\""
   echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
   echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
@@ -108,7 +108,7 @@ ROOT_ENV_FILE_PATH="../.env"
 {
   echo "AZURE_OPENAI_ENDPOINT=\"$AZURE_OPENAI_ENDPOINT\""
   echo "PROJECT_ENDPOINT=\"$PROJECTS_ENDPOINT\""
-  echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-4o-mini\""
+  echo "GPT_MODEL_DEPLOYMENT_NAME=\"gpt-5.4-mini\""
   echo "EMBEDDING_MODEL_DEPLOYMENT_NAME=\"text-embedding-3-small\""
   echo "APPLICATIONINSIGHTS_CONNECTION_STRING=\"$APPLICATIONINSIGHTS_CONNECTION_STRING\""
   echo "POSTGRES_SERVER_FQDN=\"$POSTGRES_SERVER_FQDN\""
@@ -129,7 +129,7 @@ CSHARP_PROJECT_PATH="../src/csharp/workshop/AgentWorkshop.Client/AgentWorkshop.C
 # Set the user secrets for the C# project (if the project exists)
 if [ -f "$CSHARP_PROJECT_PATH" ]; then
   dotnet user-secrets set "ConnectionStrings:AiAgentService" "$PROJECTS_ENDPOINT" --project "$CSHARP_PROJECT_PATH"
-  dotnet user-secrets set "Azure:ModelName" "gpt-4o-mini" --project "$CSHARP_PROJECT_PATH"
+  dotnet user-secrets set "Azure:ModelName" "gpt-5.4-mini" --project "$CSHARP_PROJECT_PATH"
 fi
 
 # (Keeping output.json for reference; delete manually if not needed)

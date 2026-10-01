@@ -77,7 +77,7 @@ cd infra && ./deploy.sh
 The deployment script will:
 
 - Create an Azure AI Foundry workspace
-- Deploy both **gpt-4o-mini** and **text-embedding-3-small** models
+- Deploy both **gpt-5.4-mini** and **text-embedding-3-small** models
 - Configure environment variables in `src/python/workshop/.env`
 
 ### Authenticating with Azure

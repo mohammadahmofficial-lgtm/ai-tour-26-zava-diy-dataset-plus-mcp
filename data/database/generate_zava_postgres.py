@@ -510,10 +510,11 @@ async def setup_store_manager_permissions(conn):
         )
         
         if not role_exists:
-            await conn.execute("CREATE ROLE store_manager LOGIN")
+            await conn.execute("CREATE ROLE store_manager LOGIN PASSWORD 'StoreManager123!'")
             logging.info("Created store_manager role")
         else:
-            logging.info("store_manager role already exists")
+            await conn.execute("ALTER ROLE store_manager WITH LOGIN PASSWORD 'StoreManager123!'")
+            logging.info("store_manager role already exists and password is set")
         
         # Grant usage on the retail schema
         await conn.execute(f"GRANT USAGE ON SCHEMA {SCHEMA_NAME} TO store_manager")

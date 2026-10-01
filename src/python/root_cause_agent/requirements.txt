@@ -1,0 +1,6 @@
+# Zava Root-Cause Agent PoC dependencies
+# (superset of src/python/requirements.txt — the MCP SDK + OpenAI client)
+mcp>=1.10.0,<2.0.0
+openai>=1.97.0,<2.0.0
+azure-identity>=1.23.0,<2.0.0
+python-dotenv>=1.1.1,<2.0.0
