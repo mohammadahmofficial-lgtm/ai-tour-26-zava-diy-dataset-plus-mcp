@@ -1,0 +1,706 @@
+{
+    "report_id": "9d8a7f17-5682-4cd3-92cf-b4c51f7779f9",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "make report on sales",
+    "title": "Sales Report",
+    "summary": "A concise report on sales performance, trends, and key metrics. It can include revenue, units sold, growth, and notable observations.",
+    "timestamp": "2026-10-01 05:36:11",
+    "executed_sql_queries": [
+        "WITH order_totals AS (\n  SELECT\n    o.order_id,\n    o.order_date,\n    SUM(oi.total_amount) AS order_revenue\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n  GROUP BY o.order_id, o.order_date\n)\nSELECT\n  DATE_TRUNC('month', order_date)::date AS month,\n  SUM(order_revenue) AS monthly_revenue,\n  COUNT(DISTINCT order_id) AS monthly_order_count\nFROM order_totals\nGROUP BY 1\nORDER BY 1",
+        "SELECT\n  s.store_name,\n  SUM(oi.total_amount) AS store_revenue,\n  COUNT(DISTINCT o.order_id) AS store_order_count,\n  SUM(oi.quantity) AS store_units_sold,\n  AVG(COALESCE(oi.discount_percent, 0)) AS average_discount\nFROM retail.orders o\nJOIN retail.order_items oi\n  ON o.order_id = oi.order_id\n AND o.store_id = oi.store_id\nJOIN retail.stores s\n  ON o.store_id = s.store_id\nWHERE s.store_name IN (\n  'Zava Retail Seattle',\n  'Zava Retail Bellevue',\n  'Zava Retail Tacoma',\n  'Zava Retail Spokane',\n  'Zava Retail Everett',\n  'Zava Retail Redmond',\n  'Zava Retail Kirkland',\n  'Zava Retail Online'\n)\nGROUP BY s.store_name\nORDER BY s.store_name;",
+        "WITH product_sales AS (\n    SELECT\n        p.category_id,\n        c.category_name,\n        p.type_id,\n        pt.type_name,\n        p.product_id,\n        p.product_name,\n        SUM(oi.total_amount) AS product_revenue,\n        SUM(oi.quantity) AS product_units_sold,\n        CASE WHEN SUM(oi.quantity) = 0 THEN NULL ELSE SUM(oi.total_amount) / SUM(oi.quantity) END AS average_selling_price\n    FROM retail.order_items oi\n    JOIN retail.products p\n      ON oi.product_id = p.product_id\n    JOIN retail.categories c\n      ON p.category_id = c.category_id\n    JOIN retail.product_types pt\n      ON p.type_id = pt.type_id\n    GROUP BY\n        p.category_id, c.category_name,\n        p.type_id, pt.type_name,\n        p.product_id, p.product_name\n)\nSELECT\n    category_name,\n    SUM(product_revenue) AS category_revenue,\n    SUM(product_units_sold) AS category_units_sold,\n    type_name AS product_type,\n    SUM(product_revenue) OVER (PARTITION BY type_name) AS product_type_revenue,\n    SUM(product_units_sold) OVER (PARTITION BY type_name) AS product_type_units_sold,\n    product_name,\n    product_revenue,\n    product_units_sold,\n    average_selling_price\nFROM product_sales\nORDER BY category_name, product_type, product_revenue DESC, product_units_sold DESC;",
+        "SELECT COUNT(*) AS inventory_rows, COUNT(DISTINCT store_id) AS stores_with_inventory, COUNT(DISTINCT product_id) AS products_with_inventory, SUM(stock_level) AS total_inventory_on_hand, SUM(CASE WHEN stock_level = 0 THEN 1 ELSE 0 END) AS stockout_rows FROM retail.inventory;",
+        "SELECT s.store_name, s.is_online, SUM(i.stock_level) AS inventory_on_hand, COUNT(*) AS inventory_rows, COUNT(DISTINCT i.product_id) AS products_with_inventory, SUM(CASE WHEN i.stock_level = 0 THEN 1 ELSE 0 END) AS stockout_indicator FROM retail.inventory i JOIN retail.stores s ON i.store_id = s.store_id GROUP BY s.store_name, s.is_online ORDER BY inventory_on_hand DESC;",
+        "SELECT p.product_id, p.product_name, SUM(i.stock_level) AS inventory_on_hand, COUNT(*) AS inventory_rows, SUM(CASE WHEN i.stock_level = 0 THEN 1 ELSE 0 END) AS stockout_indicator FROM retail.inventory i JOIN retail.products p ON i.product_id = p.product_id GROUP BY p.product_id, p.product_name ORDER BY inventory_on_hand DESC, p.product_name ASC LIMIT 20;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive sales summary</strong> for the 8 accessible stores shows <strong>$44.0M</strong> in revenue across <strong>184,000 orders</strong>, with an <strong>average order value of $239.13</strong>.</p><ul><li><strong>Top revenue stores:</strong> Online led with <strong>$12.99M</strong> and <strong>54,987 orders</strong>, closely followed by Seattle at <strong>$12.88M</strong> and <strong>54,931 orders</strong>. Bellevue ranked third with <strong>$8.61M</strong> from <strong>36,917 orders</strong>.</li><li><strong>Lower-volume stores:</strong> Tacoma generated <strong>$6.26M</strong> from <strong>26,327 orders</strong>, while Spokane, Everett, Redmond, and Kirkland contributed <strong>$2.40M</strong>, <strong>$1.55M</strong>, <strong>$1.21M</strong>, and <strong>$0.72M</strong> respectively.</li><li><strong>Sales mix insight:</strong> Online + Seattle account for <strong>$25.86M</strong>, or about <strong>58.8%</strong> of total revenue, indicating strong concentration in the two largest channels.</li><li><strong>Trend:</strong> Monthly revenue has grown materially over time, rising from roughly <strong>$442k</strong> in Jan 2020 to <strong>$686k</strong> in Dec 2026, with a peak of <strong>$763,329.92</strong> in Feb 2026.</li><li><strong>Operational note:</strong> Average discount levels are tightly clustered across stores, ranging from <strong>2.2161%</strong> in Spokane to <strong>2.3421%</strong> in Kirkland, suggesting consistent pricing discipline.</li></ul><p><em>Macro view:</em> performance is being driven primarily by the Online and Seattle stores, while the smaller locations provide incremental volume and geographic coverage.</p>",
+            "id": 1.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "2020-01",
+                        "2020-02",
+                        "2020-03",
+                        "2020-04",
+                        "2020-05",
+                        "2020-06",
+                        "2020-07",
+                        "2020-08",
+                        "2020-09",
+                        "2020-10",
+                        "2020-11",
+                        "2020-12",
+                        "2021-01",
+                        "2021-02",
+                        "2021-03",
+                        "2021-04",
+                        "2021-05",
+                        "2021-06",
+                        "2021-07",
+                        "2021-08",
+                        "2021-09",
+                        "2021-10",
+                        "2021-11",
+                        "2021-12",
+                        "2022-01",
+                        "2022-02",
+                        "2022-03",
+                        "2022-04",
+                        "2022-05",
+                        "2022-06",
+                        "2022-07",
+                        "2022-08",
+                        "2022-09",
+                        "2022-10",
+                        "2022-11",
+                        "2022-12",
+                        "2023-01",
+                        "2023-02",
+                        "2023-03",
+                        "2023-04",
+                        "2023-05",
+                        "2023-06",
+                        "2023-07",
+                        "2023-08",
+                        "2023-09",
+                        "2023-10",
+                        "2023-11",
+                        "2023-12",
+                        "2024-01",
+                        "2024-02",
+                        "2024-03",
+                        "2024-04",
+                        "2024-05",
+                        "2024-06",
+                        "2024-07",
+                        "2024-08",
+                        "2024-09",
+                        "2024-10",
+                        "2024-11",
+                        "2024-12",
+                        "2025-01",
+                        "2025-02",
+                        "2025-03",
+                        "2025-04",
+                        "2025-05",
+                        "2025-06",
+                        "2025-07",
+                        "2025-08",
+                        "2025-09",
+                        "2025-10",
+                        "2025-11",
+                        "2025-12",
+                        "2026-01",
+                        "2026-02",
+                        "2026-03",
+                        "2026-04",
+                        "2026-05",
+                        "2026-06",
+                        "2026-07",
+                        "2026-08",
+                        "2026-09",
+                        "2026-10",
+                        "2026-11",
+                        "2026-12"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Revenue",
+                            "data": [
+                                442230.63,
+                                476692.13,
+                                429898.29,
+                                450840.73,
+                                398306.74,
+                                460362.08,
+                                436171.54,
+                                473516.52,
+                                434489.33,
+                                438206.61,
+                                448406.74,
+                                444868.83,
+                                501857.99,
+                                524555.41,
+                                456641.86,
+                                431157.62,
+                                495745.04,
+                                485529.92,
+                                511199.6,
+                                499003.24,
+                                501748.21,
+                                498691.91,
+                                488664.76,
+                                491501.02,
+                                592875.17,
+                                623114.61,
+                                510698.58,
+                                505145.67,
+                                532590.54,
+                                555723.06,
+                                577869.77,
+                                587582.43,
+                                504943.56,
+                                537108.42,
+                                529823.02,
+                                599074.98,
+                                529795.78,
+                                600608.68,
+                                499190.82,
+                                486971.03,
+                                481064.82,
+                                518814.48,
+                                505667.1,
+                                551811.97,
+                                502031.99,
+                                511692.14,
+                                528949.88,
+                                546930.83,
+                                622197.47,
+                                609270.81,
+                                548487.79,
+                                552823.42,
+                                552004.86,
+                                558528.5,
+                                605086.65,
+                                551139.94,
+                                560641.65,
+                                536271.96,
+                                547608.37,
+                                581014.65,
+                                641513.01,
+                                644240.11,
+                                607195.18,
+                                578183.55,
+                                607176.3,
+                                612116.68,
+                                634724.09,
+                                697129.6,
+                                643916.85,
+                                600021.19,
+                                599552.89,
+                                626893.94,
+                                725969.01,
+                                763329.92,
+                                650763.49,
+                                640041.68,
+                                674583.92,
+                                694201.62,
+                                679308.98,
+                                683987.27,
+                                652074.03,
+                                657942.27,
+                                657385.36,
+                                686056.01
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "tension": 0.25,
+                            "yAxisID": "y"
+                        },
+                        {
+                            "label": "Order Count",
+                            "data": [
+                                1919,
+                                1872,
+                                1910,
+                                1948,
+                                1949,
+                                1883,
+                                1872,
+                                1886,
+                                1969,
+                                1897,
+                                1922,
+                                1898,
+                                2184,
+                                2059,
+                                2059,
+                                2009,
+                                2156,
+                                2056,
+                                2121,
+                                2128,
+                                2079,
+                                2155,
+                                2080,
+                                2085,
+                                2337,
+                                2381,
+                                2222,
+                                2289,
+                                2290,
+                                2323,
+                                2331,
+                                2307,
+                                2233,
+                                2364,
+                                2243,
+                                2394,
+                                2257,
+                                2298,
+                                2226,
+                                2227,
+                                2124,
+                                2213,
+                                2164,
+                                2304,
+                                2295,
+                                2169,
+                                2239,
+                                2224,
+                                2475,
+                                2427,
+                                2402,
+                                2514,
+                                2377,
+                                2366,
+                                2448,
+                                2421,
+                                2408,
+                                2333,
+                                2494,
+                                2449,
+                                2609,
+                                2593,
+                                2712,
+                                2584,
+                                2587,
+                                2723,
+                                2582,
+                                2730,
+                                2720,
+                                2637,
+                                2631,
+                                2624,
+                                2996,
+                                2967,
+                                2915,
+                                2963,
+                                2959,
+                                2929,
+                                2845,
+                                2877,
+                                2848,
+                                2925,
+                                2861,
+                                2926
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "tension": 0.25,
+                            "yAxisID": "y1"
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "interaction": {
+                        "mode": "index",
+                        "intersect": false
+                    },
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Monthly Sales Trend: Revenue and Order Count"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Month"
+                            }
+                        },
+                        "y": {
+                            "type": "linear",
+                            "display": true,
+                            "position": "left",
+                            "title": {
+                                "display": true,
+                                "text": "Revenue ($)"
+                            }
+                        },
+                        "y1": {
+                            "type": "linear",
+                            "display": true,
+                            "position": "right",
+                            "grid": {
+                                "drawOnChartArea": false
+                            },
+                            "title": {
+                                "display": true,
+                                "text": "Order Count"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 2.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store",
+                    "Revenue",
+                    "Orders",
+                    "Units Sold",
+                    "Average Discount"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Bellevue",
+                        "8,611,540.81",
+                        "36,917",
+                        "125,496",
+                        "2.2519"
+                    ],
+                    [
+                        "Zava Retail Everett",
+                        "1,549,259.94",
+                        "6,528",
+                        "22,269",
+                        "2.2524"
+                    ],
+                    [
+                        "Zava Retail Kirkland",
+                        "724,376.30",
+                        "3,137",
+                        "10,795",
+                        "2.3421"
+                    ],
+                    [
+                        "Zava Retail Online",
+                        "12,988,647.09",
+                        "54,987",
+                        "186,636",
+                        "2.2365"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "1,213,556.20",
+                        "5,197",
+                        "17,448",
+                        "2.2703"
+                    ],
+                    [
+                        "Zava Retail Seattle",
+                        "12,875,541.22",
+                        "54,931",
+                        "186,499",
+                        "2.2616"
+                    ],
+                    [
+                        "Zava Retail Spokane",
+                        "2,400,989.07",
+                        "10,383",
+                        "34,907",
+                        "2.2161"
+                    ],
+                    [
+                        "Zava Retail Tacoma",
+                        "6,259,838.47",
+                        "26,327",
+                        "89,889",
+                        "2.2345"
+                    ]
+                ]
+            },
+            "id": 3.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "POWER TOOLS",
+                        "STORAGE & ORGANIZATION",
+                        "PAINT & FINISHES",
+                        "LUMBER & BUILDING MATERIALS",
+                        "ELECTRICAL",
+                        "HAND TOOLS",
+                        "PLUMBING",
+                        "GARDEN & OUTDOOR",
+                        "HARDWARE"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Revenue",
+                            "data": [
+                                16947305.02,
+                                10912229.98,
+                                3389557.41,
+                                2885365.82,
+                                2768187.48,
+                                2734234.31,
+                                2597268.35,
+                                2585172.96,
+                                1804427.77
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Category Sales Breakdown by Revenue"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "callback": "function(value){return '$' + (value/1000000).toFixed(1) + 'M';}"
+                            }
+                        },
+                        "y": {
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "MITER SAWS",
+                        "CIRCULAR SAWS",
+                        "CABINETS",
+                        "BELT SANDERS",
+                        "ANGLE GRINDERS",
+                        "WORKBENCHES",
+                        "DRILLS",
+                        "LOCKER SYSTEMS",
+                        "ROUTERS",
+                        "HAMMERS"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Revenue",
+                            "data": [
+                                2649547.61,
+                                2484249.35,
+                                2161668.14,
+                                1694810.08,
+                                1070546.31,
+                                1280424.23,
+                                605954.27,
+                                693286.36,
+                                655722.95,
+                                227104.33
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Product Type Sales Breakdown by Revenue"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "callback": "function(value){return '$' + (value/1000000).toFixed(1) + 'M';}"
+                            }
+                        },
+                        "y": {
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.01
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Product Name",
+                    "SKU",
+                    "Category",
+                    "Type",
+                    "Units Sold",
+                    "Revenue",
+                    "Avg Selling Price"
+                ],
+                "rows": [
+                    [
+                        "Sliding Miter Saw 12-inch",
+                        "N/A",
+                        "POWER TOOLS",
+                        "MITER SAWS",
+                        "1,584",
+                        "1,099,714.12",
+                        "694.26"
+                    ],
+                    [
+                        "Cordless Miter Saw 10-inch",
+                        "N/A",
+                        "POWER TOOLS",
+                        "MITER SAWS",
+                        "1,695",
+                        "908,863.62",
+                        "536.20"
+                    ],
+                    [
+                        "Track Saw",
+                        "N/A",
+                        "POWER TOOLS",
+                        "CIRCULAR SAWS",
+                        "1,605",
+                        "815,385.39",
+                        "508.03"
+                    ],
+                    [
+                        "Gym Style Locker Bank",
+                        "N/A",
+                        "STORAGE & ORGANIZATION",
+                        "LOCKER SYSTEMS",
+                        "1,465",
+                        "693,286.36",
+                        "473.23"
+                    ],
+                    [
+                        "Heavy Duty Workbench 6-foot",
+                        "N/A",
+                        "STORAGE & ORGANIZATION",
+                        "WORKBENCHES",
+                        "1,441",
+                        "681,929.60",
+                        "473.23"
+                    ],
+                    [
+                        "Router Table Combo",
+                        "N/A",
+                        "POWER TOOLS",
+                        "ROUTERS",
+                        "1,697",
+                        "655,722.95",
+                        "386.40"
+                    ],
+                    [
+                        "Compound Miter Saw 10-inch",
+                        "N/A",
+                        "POWER TOOLS",
+                        "MITER SAWS",
+                        "1,586",
+                        "640,969.87",
+                        "404.14"
+                    ],
+                    [
+                        "Chemical Storage Cabinet",
+                        "N/A",
+                        "STORAGE & ORGANIZATION",
+                        "CABINETS",
+                        "1,452",
+                        "615,495.54",
+                        "423.90"
+                    ],
+                    [
+                        "Benchtop Drill Press",
+                        "N/A",
+                        "POWER TOOLS",
+                        "DRILLS",
+                        "1,561",
+                        "605,954.27",
+                        "388.18"
+                    ],
+                    [
+                        "Adjustable Height Workbench",
+                        "N/A",
+                        "STORAGE & ORGANIZATION",
+                        "WORKBENCHES",
+                        "1,405",
+                        "598,494.63",
+                        "425.97"
+                    ]
+                ]
+            },
+            "id": 5.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Head Office sales snapshot:</strong> total revenue reached <strong>$44.0M</strong> across <strong>184,000 orders</strong>, with an average order value of <strong>$239.13</strong>. Sales have grown materially over time: monthly revenue rose from roughly <strong>$442k</strong> in Jan-2020 to <strong>$686k</strong> in Dec-2026, peaking at <strong>$763,329.92</strong> in Feb-2026 and <strong>$725,969.01</strong> in Jan-2026.</p><ul><li><strong>Top store by revenue:</strong> <em>Online</em> led with <strong>$12.99M</strong> and <strong>54,987 orders</strong>, narrowly ahead of <em>Seattle</em> at <strong>$12.88M</strong> and <strong>54,931 orders</strong>. Together they generated about <strong>58.8%</strong> of total revenue.</li><li><strong>Next strongest stores:</strong> <em>Bellevue</em> delivered <strong>$8.61M</strong>, followed by <em>Tacoma</em> at <strong>$6.26M</strong>. The smallest revenue base was <em>Kirkland</em> at <strong>$724.4k</strong>.</li><li><strong>Category mix:</strong> <em>Power Tools</em> was the clear leader with <strong>$16.95M</strong> in revenue, followed by <em>Storage &amp; Organization</em> at <strong>$10.91M</strong>. By units, <em>Paint &amp; Finishes</em> sold the most at <strong>84,580 units</strong>, despite only <strong>$3.39M</strong> revenue, indicating lower ticket sizes.</li><li><strong>Best-selling product types:</strong> <em>Miter Saws</em> generated <strong>$2.65M</strong>, <em>Circular Saws</em> <strong>$2.48M</strong>, and <em>Cabinets</em> <strong>$2.16M</strong>. The highest-revenue product was <strong>Sliding Miter Saw 12-inch</strong> at <strong>$1.10M</strong> from <strong>1,584 units</strong> (ASP <strong>$694.26</strong>).</li><li><strong>Discount impact:</strong> average discount rates were tightly clustered around <strong>2.22%\u20132.34%</strong> across stores. <em>Kirkland</em> had the highest average discount at <strong>2.3421%</strong>, while <em>Spokane</em> was lowest at <strong>2.2161%</strong>; the spread is only about <strong>0.13 percentage points</strong>, suggesting discounting is broadly consistent.</li><li><strong>Inventory observations:</strong> inventory is healthy across all <strong>8 stores</strong> and <strong>424 products</strong>, with <strong>0 stockout rows</strong>. Total on-hand inventory is <strong>3,893,197 units</strong>; <em>Seattle</em> holds the most at <strong>946,964</strong>, followed by <em>Online</em> at <strong>898,779</strong> and <em>Bellevue</em> at <strong>714,421</strong>.</li></ul><p><em>Notable pattern:</em> high-revenue stores and high-inventory stores align at the top end, while lower-volume stores still maintain full assortment coverage, indicating the network is well stocked without visible stockout pressure.</p>",
+            "id": 6.0
+        }
+    ]
+}

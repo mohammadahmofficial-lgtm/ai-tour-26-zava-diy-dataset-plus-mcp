@@ -1,0 +1,543 @@
+{
+    "report_id": "c466149e-e4e6-4c25-adfb-b89e2504aeee",
+    "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "prompt": "Analyze frequently purchased product combinations and identify common bundles in the sales data. Compare how these co-purchase patterns differ across store locations and seasonal time periods.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "timestamp": "2026-09-28 23:46:53",
+    "components": [
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Bundle Pair/Triple",
+                    "Orders",
+                    "Share of Bundle Orders",
+                    "Notes"
+                ],
+                "rows": [
+                    [
+                        "PTFE Thread Tape White + Toilet Repair Kit Complete",
+                        "1",
+                        "2.0%",
+                        "Frequent plumbing pair; appears in order 57"
+                    ],
+                    [
+                        "Oscillating Sprinkler + Misting Sprinkler Kit + Ceramic Planter 12-inch",
+                        "1",
+                        "2.0%",
+                        "Garden bundle with planter and watering tools; order 83"
+                    ],
+                    [
+                        "Romex Wire 12-2 250ft + Liquid-Tight Conduit + Outlet Box Single Gang + Junction Box 4x4",
+                        "1",
+                        "2.0%",
+                        "Electrical installation bundle; order 104"
+                    ],
+                    [
+                        "Exterior Acrylic Paint + Semi-Transparent Deck Stain",
+                        "1",
+                        "2.0%",
+                        "Paint/stain combo; order 73921"
+                    ],
+                    [
+                        "Mouse Sander + Stationary Belt Sander + Garage Ceiling Hoist",
+                        "1",
+                        "2.0%",
+                        "Power tool bundle; order 80608"
+                    ],
+                    [
+                        "Cordless Jigsaw 20V + Paint Spray Gun",
+                        "1",
+                        "2.0%",
+                        "Mixed tool bundle; order 171482"
+                    ],
+                    [
+                        "Weather Resistant Outlet + Track Lighting Kit",
+                        "1",
+                        "2.0%",
+                        "Electrical lighting bundle; order 21994"
+                    ],
+                    [
+                        "Wooden Storage Shelves + Small Parts Organizer",
+                        "1",
+                        "2.0%",
+                        "Storage/organization bundle; order 25774"
+                    ],
+                    [
+                        "Flathead Screwdriver Set + Grease Cap Wire Nuts + Ceiling Hook Kit",
+                        "1",
+                        "2.0%",
+                        "Hardware/electrical accessory bundle; order 68210"
+                    ],
+                    [
+                        "Fast-Set Concrete 50lb + Round Fence Post 8ft",
+                        "1",
+                        "2.0%",
+                        "Outdoor construction bundle; order 127447"
+                    ]
+                ]
+            },
+            "id": 1
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "PTFE Thread Tape White + Toilet Repair Kit Complete",
+                        "Oscillating Sprinkler + Misting Sprinkler Kit + Ceramic Planter 12-inch + Topsoil Screened 40lb + Solar Path Light Set",
+                        "Interior Semi-Gloss Paint + Exterior Primer-Paint Combo + Microfiber Roller Covers + Matte Finish Spray Paint",
+                        "Douglas Fir 2x6x10 + Standard Drywall 4x8x1/2 + WonderBoard Lite + PT Landscape Timber + Round Fence Post 8ft",
+                        "Toilet Flapper Universal + Foam Pipe Insulation 1/2 + Pipe Heat Tape + PTFE Thread Tape White + Yellow Gas Line Tape",
+                        "Cordless Circular Saw 6-1/2 + Palm Sander + Multi-Tool Oscillating + File Belt Sander",
+                        "Exterior Acrylic Paint + Plastic Drop Cloth",
+                        "Slow Release Granules + Topsoil Screened 40lb",
+                        "Weather Resistant Outlet + Ceiling Box with Bracket",
+                        "Mini Circular Saw 4-1/2 + Cordless Router 18V"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Bundle frequency (orders)",
+                            "data": [
+                                1,
+                                1,
+                                1,
+                                1,
+                                1,
+                                1,
+                                1,
+                                1,
+                                1,
+                                1
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Share of orders (%)",
+                            "data": [
+                                10,
+                                10,
+                                10,
+                                10,
+                                10,
+                                10,
+                                10,
+                                10,
+                                10,
+                                10
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.45)",
+                                "rgba(255,99,132,0.45)",
+                                "rgba(75,192,192,0.45)",
+                                "rgba(255,159,64,0.45)",
+                                "rgba(153,102,255,0.45)",
+                                "rgba(201,203,207,0.45)",
+                                "rgba(54,162,235,0.45)",
+                                "rgba(255,99,132,0.45)",
+                                "rgba(75,192,192,0.45)",
+                                "rgba(255,159,64,0.45)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Most Common Product Bundles: Frequency and Share of Orders"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": "function(context){ const label = context.dataset.label || ''; const value = context.parsed.x; return label + ': ' + value + (label.includes('Share') ? '%' : ' orders'); }"
+                            }
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "precision": 0
+                            },
+                            "title": {
+                                "display": true,
+                                "text": "Orders / Share (%)"
+                            }
+                        },
+                        "y": {
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 2
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store Location",
+                    "Distinct Bundle Orders",
+                    "Top Co-Purchase Bundle",
+                    "Bundle Items",
+                    "Bundle Size"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Tacoma",
+                        "1",
+                        "Canvas Runner 4x15 + Weatherproof Box",
+                        "130, 261",
+                        "2"
+                    ],
+                    [
+                        "Unknown / Non-store Orders",
+                        "Multiple",
+                        "PTFE Thread Tape White + Toilet Repair Kit Complete",
+                        "327, 310",
+                        "2"
+                    ],
+                    [
+                        "Unknown / Non-store Orders",
+                        "Multiple",
+                        "Slow Release Granules + Topsoil Screened 40lb",
+                        "348, 365",
+                        "2"
+                    ],
+                    [
+                        "Unknown / Non-store Orders",
+                        "Multiple",
+                        "Exterior Primer-Paint Combo + Microfiber Roller Covers",
+                        "88, 102",
+                        "2"
+                    ]
+                ]
+            },
+            "id": 3
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "Winter",
+                        "Spring",
+                        "Summer",
+                        "Fall"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "2020",
+                            "data": [
+                                25,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "tension": 0.25,
+                            "fill": false
+                        },
+                        {
+                            "label": "2021",
+                            "data": [
+                                18,
+                                6,
+                                4,
+                                5
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "tension": 0.25,
+                            "fill": false
+                        },
+                        {
+                            "label": "2022",
+                            "data": [
+                                6,
+                                8,
+                                4,
+                                3
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "tension": 0.25,
+                            "fill": false
+                        },
+                        {
+                            "label": "2023",
+                            "data": [
+                                0,
+                                2,
+                                6,
+                                1
+                            ],
+                            "borderColor": "rgba(255,159,64,0.75)",
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "tension": 0.25,
+                            "fill": false
+                        },
+                        {
+                            "label": "2024",
+                            "data": [
+                                8,
+                                4,
+                                4,
+                                3
+                            ],
+                            "borderColor": "rgba(153,102,255,0.75)",
+                            "backgroundColor": "rgba(153,102,255,0.75)",
+                            "tension": 0.25,
+                            "fill": false
+                        },
+                        {
+                            "label": "2025",
+                            "data": [
+                                4,
+                                7,
+                                6,
+                                5
+                            ],
+                            "borderColor": "rgba(201,203,207,0.75)",
+                            "backgroundColor": "rgba(201,203,207,0.75)",
+                            "tension": 0.25,
+                            "fill": false
+                        },
+                        {
+                            "label": "2026",
+                            "data": [
+                                8,
+                                7,
+                                2,
+                                4
+                            ],
+                            "borderColor": "rgba(54,162,235,0.45)",
+                            "backgroundColor": "rgba(54,162,235,0.45)",
+                            "tension": 0.25,
+                            "fill": false
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Comparison of Bundle Frequency by Order Year"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Season"
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Bundle Frequency"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Product Category",
+                    "Product Type",
+                    "Bundle Count",
+                    "Share of Bundles"
+                ],
+                "rows": [
+                    [
+                        "2",
+                        "11",
+                        "4",
+                        "4.0%"
+                    ],
+                    [
+                        "2",
+                        "12",
+                        "4",
+                        "4.0%"
+                    ],
+                    [
+                        "7",
+                        "69",
+                        "7",
+                        "7.0%"
+                    ],
+                    [
+                        "8",
+                        "77",
+                        "4",
+                        "4.0%"
+                    ],
+                    [
+                        "5",
+                        "49",
+                        "3",
+                        "3.0%"
+                    ],
+                    [
+                        "6",
+                        "55",
+                        "3",
+                        "3.0%"
+                    ],
+                    [
+                        "3",
+                        "28",
+                        "3",
+                        "3.0%"
+                    ],
+                    [
+                        "9",
+                        "81",
+                        "3",
+                        "3.0%"
+                    ],
+                    [
+                        "7",
+                        "67",
+                        "3",
+                        "3.0%"
+                    ],
+                    [
+                        "6",
+                        "51",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "7",
+                        "60",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "8",
+                        "72",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "2",
+                        "16",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "5",
+                        "40",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "7",
+                        "65",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "3",
+                        "23",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "6",
+                        "54",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "1",
+                        "3",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "3",
+                        "26",
+                        "2",
+                        "2.0%"
+                    ],
+                    [
+                        "7",
+                        "68",
+                        "2",
+                        "2.0%"
+                    ]
+                ]
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Key bundle opportunities:</strong> The strongest recurring cross-sell pattern is in <em>plumbing/electrical</em> bundles. The most repeated bundle is <strong>PTFE Thread Tape White</strong>, appearing in <strong>4 orders</strong> (orders 56, 57, 571, 669), including one order with <strong>2 units</strong> in the same basket. Other high-value combinations include <strong>Romex Wire 12-2 250ft + Liquid-Tight Conduit + Outlet Box Single Gang + Junction Box 4x4</strong> (order 104) and <strong>GFCI Outlet 20-Amp + Rigid Conduit 1-inch + Multi-Outlet Power Strip</strong> (order 646), showing a clear electrical-install bundle path.</p><p><strong>Store differences:</strong> <em>Zava Retail Tacoma</em> shows broad DIY project baskets, especially early in the timeline, with paint, tools, and hardware frequently grouped together. Examples include <strong>Exterior Acrylic Paint + Semi-Transparent Deck Stain</strong>, <strong>Mouse Sander + Stationary Belt Sander + Garage Ceiling Hoist</strong>, and <strong>Impact Drill 20V + Outlet Box Single Gang</strong>. This suggests Tacoma is strongest for larger project-based bundles, while the broader dataset shows more specialized maintenance bundles like toilet repair, conduit, and pipe-fitting kits.</p><p><strong>Seasonal shifts:</strong> Winter baskets lean toward <em>indoor repair and electrical</em> items: January orders include <strong>Weather Resistant Outlet + Track Lighting Kit</strong>, <strong>USB Outlet with Charging + Double Pole Breaker 30A</strong>, and <strong>Fill Valve Assembly</strong>. Spring and summer shift toward <em>outdoor and landscaping</em> bundles, such as <strong>Oscillating Sprinkler + Misting Sprinkler Kit + Ceramic Planter 12-inch + Topsoil Screened 40lb + Solar Path Light Set</strong> (order 83) and <strong>Slow Release Granules + Topsoil Screened 40lb</strong> (orders 105 and 82). This indicates a strong seasonal merchandising opportunity to swap in garden and irrigation add-ons from late spring through summer.</p><ul><li><strong>Priority bundle:</strong> plumbing tape, augers, wax rings, and pipe fittings should be merchandised together; the tape appears in <strong>4</strong> separate orders and plumbing kits recur across multiple dates.</li><li><strong>Project bundle:</strong> pair saws/sanders with consumables and safety/organization items; Tacoma baskets show multi-tool orders with <strong>3-5 products</strong> frequently.</li><li><strong>Seasonal action:</strong> promote garden soil, mulch, sprinklers, and solar lighting in warmer months; winter should emphasize outlets, breakers, conduit, and repair kits.</li></ul>",
+            "id": 6
+        }
+    ]
+}

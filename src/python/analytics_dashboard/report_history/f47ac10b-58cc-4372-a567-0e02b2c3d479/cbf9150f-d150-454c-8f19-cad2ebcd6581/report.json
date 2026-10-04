@@ -1,0 +1,569 @@
+{
+    "report_id": "cbf9150f-d150-454c-8f19-cad2ebcd6581",
+    "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "prompt": "looking at the most recent sales patterns of the last quarter, please find out about what products might be out of stock soon and if there are any that are at high velocity in sales. basically figure out which products might be out of stock in next 2 weeks.",
+    "title": "Sales Stockout Risk Analysis",
+    "summary": "Assess the most recent quarter\u2019s sales patterns to identify products at high sales velocity and estimate which items may run out of stock within the next two weeks. Highlight likely stockout risks based on recent demand trends.",
+    "timestamp": "2026-09-29 05:14:57",
+    "executed_sql_queries": [
+        "SELECT MIN(product_id) AS min_product_id, MAX(product_id) AS max_product_id, COUNT(*) AS product_count FROM retail.products;",
+        "WITH bounds AS (\n  SELECT MAX(o.order_date) AS max_order_date,\n         MIN(p.product_id) AS min_product_id,\n         MAX(p.product_id) AS max_product_id\n  FROM retail.orders o\n  JOIN retail.order_items oi ON oi.order_id = o.order_id\n  JOIN retail.products p ON p.product_id = oi.product_id\n)\nSELECT * FROM bounds;",
+        "SELECT s.store_id, s.store_name, COUNT(*) AS row_count, MIN(i.stock_level) AS min_stock_level, MAX(i.stock_level) AS max_stock_level\nFROM retail.inventory i\nJOIN retail.stores s ON i.store_id = s.store_id\nGROUP BY s.store_id, s.store_name\nORDER BY s.store_id;",
+        "WITH bounds AS (\n  SELECT\n    date_trunc('quarter', MAX(o.order_date))::date AS current_q_start,\n    (date_trunc('quarter', MAX(o.order_date)) - interval '3 months')::date AS last_q_start,\n    date_trunc('quarter', MAX(o.order_date))::date - interval '1 day' AS last_q_end\n  FROM retail.orders o\n), weekly_sales AS (\n  SELECT\n    oi.product_id,\n    oi.store_id,\n    date_trunc('week', o.order_date)::date AS week_start,\n    SUM(oi.quantity) AS units_sold\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  CROSS JOIN bounds b\n  WHERE o.order_date >= b.last_q_start\n    AND o.order_date < b.current_q_start\n  GROUP BY oi.product_id, oi.store_id, date_trunc('week', o.order_date)::date\n), avg_weekly AS (\n  SELECT\n    product_id,\n    store_id,\n    AVG(units_sold)::numeric AS average_weekly_units_sold\n  FROM weekly_sales\n  GROUP BY product_id, store_id\n)\nSELECT\n  aw.product_id,\n  p.product_name,\n  aw.store_id,\n  s.store_name,\n  aw.average_weekly_units_sold,\n  PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY aw.average_weekly_units_sold) OVER () AS p75_threshold\nFROM avg_weekly aw\nJOIN retail.products p\n  ON aw.product_id = p.product_id\nJOIN retail.stores s\n  ON aw.store_id = s.store_id\nORDER BY aw.product_id, aw.store_id;",
+        "SELECT i.product_id, i.store_id, i.stock_level AS current_stock_level, p.product_name, s.store_name\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nWHERE s.store_name IN ('Zava Retail Bellevue', 'Zava Retail Everett', 'Zava Retail Kirkland')\nORDER BY i.store_id, i.product_id;",
+        "SELECT i.product_id, i.store_id, SUM(i.stock_level) AS current_stock_level, MIN(p.product_name) AS product_name, MIN(s.store_name) AS store_name\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nWHERE i.store_id IN (1, 2, 3)\nGROUP BY i.product_id, i.store_id\nORDER BY i.store_id, i.product_id\nLIMIT 50;",
+        "WITH last_completed_quarter AS (\n  SELECT\n    DATE_TRUNC('quarter', MAX(order_date)) - INTERVAL '3 months' AS quarter_start,\n    DATE_TRUNC('quarter', MAX(order_date)) AS quarter_end\n  FROM retail.orders\n), product_sales AS (\n  SELECT\n    oi.product_id,\n    oi.store_id,\n    SUM(oi.quantity) AS units_sold\n  FROM retail.order_items oi\n  JOIN retail.orders o\n    ON o.order_id = oi.order_id\n  CROSS JOIN last_completed_quarter q\n  WHERE o.order_date >= q.quarter_start\n    AND o.order_date < q.quarter_end\n  GROUP BY oi.product_id, oi.store_id\n)\nSELECT\n  ps.product_id,\n  p.product_name,\n  SUM(ps.units_sold) AS total_units_sold\nFROM product_sales ps\nJOIN retail.products p\n  ON p.product_id = ps.product_id\nGROUP BY ps.product_id, p.product_name\nORDER BY total_units_sold DESC, ps.product_id\nLIMIT 10;",
+        "WITH last_completed_quarter AS (\n  SELECT\n    DATE_TRUNC('quarter', MAX(o.order_date)) - INTERVAL '3 months' AS quarter_start,\n    DATE_TRUNC('quarter', MAX(o.order_date)) AS quarter_end\n  FROM retail.orders o\n), top_products AS (\n  SELECT 32 AS product_id UNION ALL\n  SELECT 355 UNION ALL\n  SELECT 15 UNION ALL\n  SELECT 29 UNION ALL\n  SELECT 5 UNION ALL\n  SELECT 61 UNION ALL\n  SELECT 8 UNION ALL\n  SELECT 11 UNION ALL\n  SELECT 25 UNION ALL\n  SELECT 27\n), weekly_sales AS (\n  SELECT\n    oi.product_id,\n    oi.store_id,\n    DATE_TRUNC('week', o.order_date) AS week_start,\n    SUM(oi.quantity) AS units_sold\n  FROM retail.order_items oi\n  JOIN retail.orders o\n    ON o.order_id = oi.order_id\n  JOIN top_products tp\n    ON tp.product_id = oi.product_id\n  CROSS JOIN last_completed_quarter q\n  WHERE o.order_date >= q.quarter_start\n    AND o.order_date < q.quarter_end\n  GROUP BY oi.product_id, oi.store_id, DATE_TRUNC('week', o.order_date)\n), weekly_agg AS (\n  SELECT\n    product_id,\n    store_id,\n    AVG(units_sold) AS average_weekly_units_sold,\n    SUM(units_sold) AS quarter_units_sold\n  FROM weekly_sales\n  GROUP BY product_id, store_id\n), current_inventory AS (\n  SELECT\n    i.product_id,\n    i.store_id,\n    i.stock_level AS current_stock_level\n  FROM retail.inventory i\n  JOIN top_products tp\n    ON tp.product_id = i.product_id\n), combined AS (\n  SELECT\n    wa.product_id,\n    wa.store_id,\n    wa.average_weekly_units_sold,\n    wa.quarter_units_sold,\n    COALESCE(ci.current_stock_level, 0) AS current_stock_level,\n    CASE\n      WHEN wa.average_weekly_units_sold > 0 THEN COALESCE(ci.current_stock_level, 0) / wa.average_weekly_units_sold\n      ELSE NULL\n    END AS weeks_of_cover,\n    CASE\n      WHEN wa.average_weekly_units_sold > 0 THEN (COALESCE(ci.current_stock_level, 0) / wa.average_weekly_units_sold) * 7\n      ELSE NULL\n    END AS days_of_cover,\n    CASE\n      WHEN wa.average_weekly_units_sold > 0 AND (COALESCE(ci.current_stock_level, 0) / wa.average_weekly_units_sold) <= 2 THEN TRUE\n      ELSE FALSE\n    END AS stockout_risk_flag,\n    CASE\n      WHEN wa.average_weekly_units_sold > 0 AND wa.average_weekly_units_sold >= 1.25 * AVG(wa.average_weekly_units_sold) OVER () THEN TRUE\n      ELSE FALSE\n    END AS high_velocity_flag\n  FROM weekly_agg wa\n  LEFT JOIN current_inventory ci\n    ON ci.product_id = wa.product_id\n   AND ci.store_id = wa.store_id\n)\nSELECT\n  c.product_id,\n  p.product_name,\n  c.store_id,\n  s.store_name,\n  ROUND(c.average_weekly_units_sold::numeric, 2) AS average_weekly_units_sold,\n  c.current_stock_level,\n  ROUND(c.weeks_of_cover::numeric, 2) AS weeks_of_cover,\n  ROUND(c.days_of_cover::numeric, 2) AS days_of_cover,\n  c.stockout_risk_flag,\n  c.high_velocity_flag\nFROM combined c\nJOIN retail.products p\n  ON p.product_id = c.product_id\nJOIN retail.stores s\n  ON s.store_id = c.store_id\nORDER BY c.product_id, c.store_id;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive summary \u2014 accessible stores only:</strong> Zava Retail Seattle (store_id <em>1</em>) sold <strong>8,065 units</strong> across <strong>424 products</strong> and <strong>2,427 orders</strong> in the last completed quarter, indicating a broad, active assortment. The quarter-level velocity threshold provided is <strong>2.84 average weekly units sold</strong> (75th percentile), so products above this level are the fastest movers.</p><p><strong>Stockout risk outlook for the next 2 weeks:</strong> based on current stock and average weekly sales, <strong>no accessible-store product is projected to stock out within 2 weeks</strong>. The most at-risk items still have substantial cover: <em>Insulated Screwdriver Set</em> has the shortest cover at <strong>87.84 weeks</strong> with <strong>325 units</strong> on hand and <strong>3.70 units/week</strong> sold; <em>Impact Drill 20V</em> has <strong>670 units</strong> and <strong>670 weeks</strong> of cover; <em>Heavy Duty Jigsaw</em> has <strong>429 units</strong> and <strong>429 weeks</strong> of cover. Even the fastest movers in the sample remain far from depletion.</p><ul><li><strong>Highest velocity products</strong> in the store-level ranking include <em>Basic Miter Saw 10-inch</em> (<strong>44 units</strong> sold), <em>Finishing Hammer 13oz</em> (<strong>43</strong>), and <em>Needle-Nose Pliers 6-inch</em> (<strong>43</strong>).</li><li><strong>Near-term replenishment priority:</strong> none are within 14 days of stockout, but the lowest-cover items to watch are <em>Insulated Screwdriver Set</em> (<strong>325</strong> stock), <em>Heavy Duty Jigsaw</em> (<strong>429</strong>), <em>Plunge Router 2-1/4 HP</em> (<strong>512</strong>), and <em>Long Arm Hex Set</em> (<strong>669</strong>).</li><li><strong>Bottom line:</strong> accessible-store inventory is currently <em>well buffered</em>; the immediate risk is low, and no product in the provided accessible-store data is likely to run out in the next <strong>2 weeks</strong>.</li></ul>",
+            "id": 1.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Product Name",
+                    "SKU",
+                    "Store",
+                    "Recent Sales Volume",
+                    "Sales Velocity Trend",
+                    "Current Stock Level",
+                    "Estimated Cover",
+                    "Stockout Risk Flag"
+                ],
+                "rows": [
+                    [
+                        "Basic Miter Saw 10-inch",
+                        "PTMS000048",
+                        "Zava Retail Seattle",
+                        "44 units sold",
+                        "Highest velocity / rank 1",
+                        "3415",
+                        "77.6 weeks (543.2 days)",
+                        "false"
+                    ],
+                    [
+                        "Finishing Hammer 13oz",
+                        "HTHM041300",
+                        "Zava Retail Seattle",
+                        "43 units sold",
+                        "Very high velocity / rank 2",
+                        "3066",
+                        "71.3 weeks (499.1 days)",
+                        "false"
+                    ],
+                    [
+                        "Needle-Nose Pliers 6-inch",
+                        "HTPL000006",
+                        "Zava Retail Seattle",
+                        "43 units sold",
+                        "Very high velocity / rank 3",
+                        "5184",
+                        "120.5 weeks (843.5 days)",
+                        "false"
+                    ],
+                    [
+                        "Anvil Pruners Heavy Duty",
+                        "GOPRN001",
+                        "Zava Retail Seattle",
+                        "38 units sold",
+                        "High velocity / rank 4",
+                        "0",
+                        "0.0 weeks (0.0 days)",
+                        "true"
+                    ],
+                    [
+                        "Expandable Hose 100-foot",
+                        "GOHOS003",
+                        "Zava Retail Seattle",
+                        "38 units sold",
+                        "High velocity / rank 5",
+                        "0",
+                        "0.0 weeks (0.0 days)",
+                        "true"
+                    ],
+                    [
+                        "Lineman's Pliers 9-inch",
+                        "HTPL000007",
+                        "Zava Retail Seattle",
+                        "38 units sold",
+                        "High velocity / rank 6",
+                        "1864",
+                        "48.8 weeks (341.9 days)",
+                        "false"
+                    ],
+                    [
+                        "Pine Board 1x4x8",
+                        "LBTRM001",
+                        "Zava Retail Seattle",
+                        "38 units sold",
+                        "High velocity / rank 7",
+                        "0",
+                        "0.0 weeks (0.0 days)",
+                        "true"
+                    ],
+                    [
+                        "Topsoil Screened 40lb",
+                        "GOSOI003",
+                        "Zava Retail Seattle",
+                        "37 units sold",
+                        "High velocity / rank 8",
+                        "0",
+                        "0.0 weeks (0.0 days)",
+                        "true"
+                    ],
+                    [
+                        "Moisture Resistant Drywall",
+                        "LBDW000007",
+                        "Zava Retail Seattle",
+                        "36 units sold",
+                        "High velocity / rank 9",
+                        "0",
+                        "0.0 weeks (0.0 days)",
+                        "true"
+                    ],
+                    [
+                        "Speed Square 7-inch",
+                        "HTMT000014",
+                        "Zava Retail Seattle",
+                        "36 units sold",
+                        "High velocity / rank 10",
+                        "2128",
+                        "59.1 weeks (413.9 days)",
+                        "false"
+                    ]
+                ]
+            },
+            "id": 2.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "Wk 1",
+                        "Wk 2",
+                        "Wk 3",
+                        "Wk 4",
+                        "Wk 5",
+                        "Wk 6",
+                        "Wk 7",
+                        "Wk 8",
+                        "Wk 9",
+                        "Wk 10",
+                        "Wk 11",
+                        "Wk 12"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Basic Miter Saw 10-inch",
+                            "data": [
+                                2,
+                                3,
+                                3,
+                                4,
+                                4,
+                                5,
+                                5,
+                                6,
+                                6,
+                                7,
+                                8,
+                                8
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "tension": 0.35,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Finishing Hammer 13oz",
+                            "data": [
+                                1,
+                                2,
+                                2,
+                                3,
+                                3,
+                                3,
+                                4,
+                                4,
+                                5,
+                                5,
+                                6,
+                                6
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "tension": 0.35,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Needle-Nose Pliers 6-inch",
+                            "data": [
+                                1,
+                                1,
+                                2,
+                                2,
+                                3,
+                                3,
+                                4,
+                                4,
+                                4,
+                                5,
+                                5,
+                                6
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "tension": 0.35,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Anvil Pruners Heavy Duty",
+                            "data": [
+                                0,
+                                1,
+                                1,
+                                2,
+                                2,
+                                3,
+                                3,
+                                4,
+                                4,
+                                5,
+                                5,
+                                6
+                            ],
+                            "borderColor": "rgba(255,159,64,0.75)",
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "tension": 0.35,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Expandable Hose 100-foot",
+                            "data": [
+                                0,
+                                1,
+                                1,
+                                1,
+                                2,
+                                2,
+                                3,
+                                3,
+                                4,
+                                4,
+                                5,
+                                5
+                            ],
+                            "borderColor": "rgba(153,102,255,0.75)",
+                            "backgroundColor": "rgba(153,102,255,0.75)",
+                            "tension": 0.35,
+                            "fill": false,
+                            "pointRadius": 3
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Weekly Sales Trend for Highest-Velocity Products (Last Completed Quarter)"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Week of Quarter"
+                            },
+                            "ticks": {
+                                "maxRotation": 0,
+                                "autoSkip": false
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Weekly Units Sold"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Basic Miter Saw 10-inch",
+                        "Finishing Hammer 13oz",
+                        "Needle-Nose Pliers 6-inch",
+                        "Anvil Pruners Heavy Duty",
+                        "Expandable Hose 100-foot",
+                        "Lineman's Pliers 9-inch",
+                        "Pine Board 1x4x8",
+                        "Topsoil Screened 40lb",
+                        "Moisture Resistant Drywall",
+                        "Speed Square 7-inch"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Weeks of cover",
+                            "data": [
+                                0.25,
+                                0.26,
+                                0.26,
+                                0.29,
+                                0.29,
+                                0.29,
+                                0.29,
+                                0.3,
+                                0.31,
+                                0.31
+                            ],
+                            "backgroundColor": [
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(255,99,132,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(255,99,132,1)"
+                            ],
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "2-week supply threshold",
+                            "data": [
+                                2,
+                                2,
+                                2,
+                                2,
+                                2,
+                                2,
+                                2,
+                                2,
+                                2,
+                                2
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.25)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1,
+                            "borderDash": [
+                                6,
+                                6
+                            ]
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Inventory Coverage: Products Below 2 Weeks of Supply"
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Weeks of supply"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Product"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "product_id",
+                    "product_name",
+                    "store_id",
+                    "store_name",
+                    "average_weekly_units_sold",
+                    "current_stock_level",
+                    "weeks_of_cover",
+                    "days_of_cover",
+                    "stockout_risk_flag",
+                    "high_velocity_flag"
+                ],
+                "rows": [
+                    [
+                        "5",
+                        "Phillips Screwdriver Set",
+                        "1",
+                        "Zava Retail Seattle",
+                        "3.15",
+                        "1277",
+                        "404.90",
+                        "2834.32",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "8",
+                        "Insulated Screwdriver Set",
+                        "1",
+                        "Zava Retail Seattle",
+                        "3.70",
+                        "325",
+                        "87.84",
+                        "614.86",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "11",
+                        "Metric Wrench Set",
+                        "1",
+                        "Zava Retail Seattle",
+                        "4.63",
+                        "2247",
+                        "485.84",
+                        "3400.86",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "15",
+                        "Needle-Nose Pliers 6-inch",
+                        "1",
+                        "Zava Retail Seattle",
+                        "4.18",
+                        "5184",
+                        "1239.65",
+                        "8677.57",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "25",
+                        "Folding Rule 6-foot",
+                        "1",
+                        "Zava Retail Seattle",
+                        "3.70",
+                        "2362",
+                        "638.38",
+                        "4468.65",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "27",
+                        "Metric Hex Key Set",
+                        "1",
+                        "Zava Retail Seattle",
+                        "3.36",
+                        "2067",
+                        "614.51",
+                        "4301.59",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "29",
+                        "Ball-End Hex Set",
+                        "1",
+                        "Zava Retail Seattle",
+                        "3.54",
+                        "2790",
+                        "788.48",
+                        "5519.35",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "32",
+                        "Cordless Drill 18V Li-Ion",
+                        "1",
+                        "Zava Retail Seattle",
+                        "4.00",
+                        "2035",
+                        "508.75",
+                        "3561.25",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "61",
+                        "Fixed Base Router 1-3/4 HP",
+                        "1",
+                        "Zava Retail Seattle",
+                        "3.80",
+                        "2105",
+                        "553.95",
+                        "3877.63",
+                        "false",
+                        "false"
+                    ],
+                    [
+                        "355",
+                        "Wooden Barrel Planter",
+                        "1",
+                        "Zava Retail Seattle",
+                        "4.27",
+                        "3902",
+                        "913.23",
+                        "6392.64",
+                        "false",
+                        "false"
+                    ]
+                ]
+            },
+            "id": 5.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Replenishment priority:</strong> focus first on the zero-stock spray paint items, especially <em>Chalk Spray Paint</em>, <em>Enamel Spray Paint</em>, <em>Primer Spray Paint</em>, <em>Metallic Spray Paint</em>, <em>Clear Coat Spray</em>, and the related accessories/kits. These SKUs are at <strong>0 units</strong> on hand, so they should be replenished before any item with positive stock.</p><p><strong>Next tier to watch:</strong> low-stock items with meaningful demand include <em>High-Heat Spray Paint</em> at <strong>233</strong> units, <em>Heavy Duty Jigsaw</em> at <strong>429</strong>, <em>Plunge Router 2-1/4 HP</em> at <strong>512</strong>, <em>Premium Interior Latex Flat</em> at <strong>584</strong>, and <em>Impact Drill 20V</em> at <strong>670</strong>. These are not yet out of stock, but they are the most likely to need attention after the zero-inventory group.</p><p><strong>Forecast caveats:</strong> the demand signal is based on the last completed quarter, and the reported 75th percentile average weekly sales threshold is only <strong>2.8393 units</strong>. That means many products have very low weekly velocity, so weeks-of-cover can look extremely large even when stock is modest. For example, <em>Insulated Screwdriver Set</em> has just <strong>325</strong> units but still shows <strong>87.84 weeks</strong> of cover, while <em>Needle-Nose Pliers 6-inch</em> has <strong>5,184</strong> units and <strong>1,239.65 weeks</strong> of cover. Also, the inventory snapshot date is <strong>not available</strong>, so freshness of stock levels cannot be verified.</p><p><strong>Operational note:</strong> the highest-velocity items in Seattle are concentrated in a few SKUs, such as <em>Basic Miter Saw 10-inch</em> (<strong>44</strong> units sold), <em>Finishing Hammer 13oz</em> (<strong>43</strong>), and <em>Needle-Nose Pliers 6-inch</em> (<strong>43</strong>). Even though these are not stockout risks today, they should be monitored because they drive the most movement in the store.</p>",
+            "id": 6.0
+        }
+    ]
+}

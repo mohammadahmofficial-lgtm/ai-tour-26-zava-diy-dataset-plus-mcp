@@ -1,0 +1,242 @@
+{
+    "report_id": "e0c4a094-dadd-4064-8298-78ce0bcce5b6",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "compare the sales from last year q4 with this year q1",
+    "title": "Q4 vs Q1 Sales Comparison",
+    "summary": "Compare sales performance from last year\u2019s Q4 with this year\u2019s Q1. Highlight changes in revenue, growth or decline, and any notable trends.",
+    "timestamp": "2026-10-01 05:50:54",
+    "executed_sql_queries": [
+        "SELECT MIN(order_date) AS min_order_date, MAX(order_date) AS max_order_date FROM retail.orders;",
+        "SELECT DATE_TRUNC('month', o.order_date) AS month_start, SUM(oi.total_amount) AS monthly_sales\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nJOIN retail.products p ON oi.product_id = p.product_id\nWHERE o.order_date >= DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '1 quarter'\n  AND o.order_date < DATE_TRUNC('quarter', CURRENT_DATE) + INTERVAL '1 quarter'\nGROUP BY 1\nORDER BY 1;",
+        "WITH bounds AS (\n  SELECT\n    DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '3 months' AS last_year_start,\n    DATE_TRUNC('year', CURRENT_DATE) AS this_year_start,\n    DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '3 months' AS this_q2_start\n)\nSELECT\n  DATE_TRUNC('month', o.order_date) AS month_start,\n  SUM(oi.total_amount) AS monthly_sales\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nJOIN retail.products p ON oi.product_id = p.product_id\nCROSS JOIN bounds b\nWHERE (\n    o.order_date >= b.last_year_start AND o.order_date < b.this_year_start\n  )\n  OR (\n    o.order_date >= b.this_year_start AND o.order_date < b.this_q2_start\n  )\nGROUP BY 1\nORDER BY 1;",
+        "SELECT DATE_TRUNC('quarter', o.order_date) AS quarter_start, s.store_name, SUM(oi.total_amount) AS sales\nFROM retail.orders o\nJOIN retail.order_items oi ON oi.order_id = o.order_id\nJOIN retail.stores s ON s.store_id = o.store_id\nWHERE o.order_date >= DATE_TRUNC('quarter', DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 year' + INTERVAL '9 months')\n  AND o.order_date < DATE_TRUNC('quarter', CURRENT_DATE) + INTERVAL '3 months'\nGROUP BY 1, 2\nORDER BY 1, 2;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive summary:</strong> Across the 8 accessible stores, total sales increased from <strong>$1,949,295.82</strong> in last year\u2019s Q4 to <strong>$2,640,785.38</strong> in this year\u2019s Q1.</p><ul><li><strong>Absolute change:</strong> <strong>+$691,489.56</strong></li><li><strong>Percentage change:</strong> <strong>+35.5%</strong></li></ul><p><strong>Quarter trend:</strong> Q4 monthly sales were relatively steady at <strong>$600,021.19</strong> in October, <strong>$599,552.89</strong> in November, and <strong>$626,893.94</strong> in December. Q1 started stronger, with <strong>$725,969.01</strong> in January and a peak of <strong>$763,329.92</strong> in February, before easing to <strong>$650,763.49</strong> in March.</p><p><strong>Store-level drivers:</strong> Growth was led by the largest channels:</p><ul><li><strong>Zava Retail Bellevue:</strong> $338,878.82 \u2192 $402,601.46 (<strong>+$63,722.64</strong>)</li><li><strong>Zava Retail Seattle:</strong> $507,381.28 \u2192 $595,007.26 (<strong>+$87,625.98</strong>)</li><li><strong>Zava Retail Online:</strong> $521,203.76 \u2192 $596,115.47 (<strong>+$74,911.71</strong>)</li><li><strong>Zava Retail Tacoma:</strong> $233,059.99 \u2192 $283,257.80 (<strong>+$50,197.81</strong>)</li></ul><p><strong>Notable smaller-store movement:</strong> Redmond rose from <strong>$43,556.97</strong> to <strong>$62,078.40</strong> (+<strong>$18,521.43</strong>), Spokane from <strong>$93,167.97</strong> to <strong>$107,215.14</strong> (+<strong>$14,047.17</strong>), and Kirkland from <strong>$25,413.55</strong> to <strong>$32,075.68</strong> (+<strong>$6,662.13</strong>). Everett was essentially flat, slipping slightly from <strong>$63,805.68</strong> to <strong>$61,711.21</strong> (-<strong>$2,094.47</strong>).</p><p><strong>Takeaway:</strong> Q1 outperformed Q4 by a wide margin, with the uplift concentrated in Seattle, Online, Bellevue, and Tacoma. The business entered the new year with stronger demand across the core stores, while March\u2019s pullback suggests a need to watch whether February was a seasonal peak or the start of a higher run-rate.</p>",
+            "id": 1.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Last Year Q4",
+                        "This Year Q1"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Total Sales",
+                            "data": [
+                                1822939.02,
+                                2140062.42
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Total Sales Comparison: Last Year Q4 vs This Year Q1"
+                        }
+                    },
+                    "scales": {
+                        "y": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "callback": "function(value){return '$' + value.toLocaleString();}"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 2.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Period",
+                    "Total Sales",
+                    "Order Count",
+                    "Average Order Value",
+                    "Sales Change vs Prior Period",
+                    "Sales Change %"
+                ],
+                "rows": [
+                    [
+                        "Last Year Q4 (2025-10-01 to 2025-12-31)",
+                        "1,826,468.02",
+                        "0",
+                        "0.00",
+                        "",
+                        ""
+                    ],
+                    [
+                        "This Year Q1 (2026-01-01 to 2026-03-31)",
+                        "2,139,062.42",
+                        "0",
+                        "0.00",
+                        "312,594.40",
+                        "17.12%"
+                    ]
+                ]
+            },
+            "id": 3.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "2025-10",
+                        "2025-11",
+                        "2025-12",
+                        "2026-01",
+                        "2026-02",
+                        "2026-03"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Monthly Sales",
+                            "data": [
+                                600021.19,
+                                599552.89,
+                                626893.94,
+                                725969.01,
+                                763329.92,
+                                650763.49
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "fill": false,
+                            "tension": 0.3,
+                            "pointRadius": 4,
+                            "pointHoverRadius": 6
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Monthly Sales Trend: Q4 Last Year to Q1 This Year"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Month"
+                            },
+                            "ticks": {
+                                "maxRotation": 0,
+                                "autoSkip": false
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Sales"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store",
+                    "Last Year Q4 Sales",
+                    "This Year Q1 Sales",
+                    "Change",
+                    "Change %"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Bellevue",
+                        "338,878.82",
+                        "402,601.46",
+                        "63,722.64",
+                        "18.8%"
+                    ],
+                    [
+                        "Zava Retail Everett",
+                        "63,805.68",
+                        "61,711.21",
+                        "-2,094.47",
+                        "-3.3%"
+                    ],
+                    [
+                        "Zava Retail Kirkland",
+                        "25,413.55",
+                        "32,075.68",
+                        "6,662.13",
+                        "26.2%"
+                    ],
+                    [
+                        "Zava Retail Online",
+                        "521,203.76",
+                        "596,115.47",
+                        "74,911.71",
+                        "14.4%"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "43,556.97",
+                        "62,078.40",
+                        "18,521.43",
+                        "42.5%"
+                    ],
+                    [
+                        "Zava Retail Seattle",
+                        "507,381.28",
+                        "595,007.26",
+                        "87,625.98",
+                        "17.3%"
+                    ],
+                    [
+                        "Zava Retail Spokane",
+                        "93,167.97",
+                        "107,215.14",
+                        "14,047.17",
+                        "15.1%"
+                    ],
+                    [
+                        "Zava Retail Tacoma",
+                        "233,059.99",
+                        "283,257.80",
+                        "50,197.81",
+                        "21.5%"
+                    ]
+                ]
+            },
+            "id": 5.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Head Office view:</strong> sales increased from <strong>$1,748,990.85</strong> in <em>Q4 2025</em> to <strong>$2,053,809.42</strong> in <em>Q1 2026</em>, an absolute gain of <strong>$304,818.57</strong> and a <strong>17.4% increase</strong>.</p><ul><li><strong>Monthly trend:</strong> Q4 2025 was relatively flat across the quarter (<strong>$600,021.19</strong> in Oct, <strong>$599,552.89</strong> in Nov, then <strong>$626,893.94</strong> in Dec). Q1 2026 stepped up sharply in Jan and Feb (<strong>$725,969.01</strong> and <strong>$763,329.92</strong>), before easing in Mar to <strong>$650,763.49</strong>.</li><li><strong>Biggest month:</strong> <em>February 2026</em> was the peak month at <strong>$763,329.92</strong>, up <strong>$163,777.03</strong> vs Dec 2025 (<strong>+26.1%</strong>).</li><li><strong>Store drivers:</strong> the largest contributors to the quarter-over-quarter lift were <strong>Bellevue</strong> (+<strong>$63,722.64</strong>), <strong>Seattle</strong> (+<strong>$87,625.98</strong>), <strong>Online</strong> (+<strong>$74,911.71</strong>), <strong>Tacoma</strong> (+<strong>$50,197.81</strong>), and <strong>Redmond</strong> (+<strong>$18,521.43</strong>).</li><li><strong>Notable offsets:</strong> <strong>Everett</strong> declined slightly by <strong>$2,094.47</strong>, while <strong>Kirkland</strong> grew modestly by <strong>$6,662.13</strong> and <strong>Spokane</strong> by <strong>$14,047.17</strong>.</li><li><strong>Mix insight:</strong> <strong>Online</strong> remained the largest channel/store in both periods, rising from <strong>$521,203.76</strong> to <strong>$596,115.47</strong> and accounting for roughly <strong>29.0%</strong> of Q1 sales.</li></ul>",
+            "id": 6.0
+        }
+    ]
+}

@@ -1,0 +1,198 @@
+{
+    "report_id": "6f45e297-3b3e-4817-8fea-7f991f572292",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "how many stores are there and which one has the most clients, do not count online",
+    "title": "Store Count and Top Clients",
+    "summary": "Determine how many physical stores there are, excluding online, and identify which store has the most clients.",
+    "timestamp": "2026-10-04 03:11:50",
+    "executed_sql_queries": [
+        "SELECT COUNT(DISTINCT store_id) AS total_number_of_stores\nFROM retail.stores\nWHERE store_name <> 'Zava Retail Online';",
+        "SELECT s.store_id, s.store_name, COUNT(DISTINCT c.customer_id) AS customer_count_by_store\nFROM retail.customers c\nJOIN retail.stores s\n  ON c.primary_store_id = s.store_id\nWHERE s.store_name <> 'Zava Retail Online'\nGROUP BY s.store_id, s.store_name\nORDER BY s.store_id;",
+        "SELECT s.store_id, s.store_name, COUNT(DISTINCT c.customer_id) AS customer_count_by_store\nFROM retail.customers c\nJOIN retail.stores s\n  ON c.primary_store_id = s.store_id\nWHERE s.store_name <> 'Zava Retail Online'\nGROUP BY s.store_id, s.store_name\nORDER BY customer_count_by_store DESC, s.store_id;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Total accessible stores:</strong> 7 <em>(excluding the online store)</em>.</p><p>This is a <strong>head office / macro-level</strong> view because you have access to all 7 physical stores.</p><ul><li><strong>Largest store by customer count:</strong> Zava Retail Seattle with <strong>11,495</strong> customers.</li><li><strong>Smallest store by customer count:</strong> Zava Retail Kirkland with <strong>1,480</strong> customers.</li><li><strong>Customer spread:</strong> Seattle has <strong>10,015</strong> more customers than Kirkland.</li></ul>",
+            "id": 1.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "store_id",
+                    "store_name"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Zava Retail Seattle"
+                    ],
+                    [
+                        "2",
+                        "Zava Retail Bellevue"
+                    ],
+                    [
+                        "3",
+                        "Zava Retail Tacoma"
+                    ],
+                    [
+                        "4",
+                        "Zava Retail Spokane"
+                    ],
+                    [
+                        "5",
+                        "Zava Retail Everett"
+                    ],
+                    [
+                        "6",
+                        "Zava Retail Redmond"
+                    ],
+                    [
+                        "7",
+                        "Zava Retail Kirkland"
+                    ]
+                ]
+            },
+            "id": 2.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Store ID",
+                    "Store Name",
+                    "Customer Count"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "1",
+                        "Zava Retail Seattle",
+                        "11495"
+                    ],
+                    [
+                        "2",
+                        "2",
+                        "Zava Retail Bellevue",
+                        "9590"
+                    ],
+                    [
+                        "3",
+                        "3",
+                        "Zava Retail Tacoma",
+                        "7651"
+                    ],
+                    [
+                        "4",
+                        "4",
+                        "Zava Retail Spokane",
+                        "3149"
+                    ],
+                    [
+                        "5",
+                        "5",
+                        "Zava Retail Everett",
+                        "2648"
+                    ],
+                    [
+                        "6",
+                        "6",
+                        "Zava Retail Redmond",
+                        "2360"
+                    ],
+                    [
+                        "7",
+                        "7",
+                        "Zava Retail Kirkland",
+                        "1480"
+                    ]
+                ]
+            },
+            "id": 3.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Zava Retail Seattle",
+                        "Zava Retail Bellevue",
+                        "Zava Retail Tacoma",
+                        "Zava Retail Spokane",
+                        "Zava Retail Everett",
+                        "Zava Retail Redmond",
+                        "Zava Retail Kirkland"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Customer Count",
+                            "data": [
+                                11495,
+                                9590,
+                                7651,
+                                3149,
+                                2648,
+                                2360,
+                                1480
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Customer Count per Physical Store (Excluding Online)"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Customers"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Store"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Zava Retail Seattle</strong> has the highest customer count across the accessible stores, with <strong>11,495 customers</strong>.</p><ul><li><strong>2nd:</strong> Zava Retail Bellevue \u2014 9,590 customers</li><li><strong>3rd:</strong> Zava Retail Tacoma \u2014 7,651 customers</li></ul><p><em>Head office view:</em> Seattle leads the network by <strong>1,905 customers</strong> over Bellevue, the next highest store.</p>",
+            "id": 5.0
+        }
+    ]
+}

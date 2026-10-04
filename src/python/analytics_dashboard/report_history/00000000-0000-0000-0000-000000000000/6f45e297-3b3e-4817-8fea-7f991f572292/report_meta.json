@@ -1,0 +1,13 @@
+{
+    "report_id": "6f45e297-3b3e-4817-8fea-7f991f572292",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "how many stores are there and which one has the most clients, do not count online",
+    "title": "Store Count and Top Clients",
+    "summary": "Determine how many physical stores there are, excluding online, and identify which store has the most clients.",
+    "timestamp": "2026-10-04 03:11:50",
+    "executed_sql_queries": [
+        "SELECT COUNT(DISTINCT store_id) AS total_number_of_stores\nFROM retail.stores\nWHERE store_name <> 'Zava Retail Online';",
+        "SELECT s.store_id, s.store_name, COUNT(DISTINCT c.customer_id) AS customer_count_by_store\nFROM retail.customers c\nJOIN retail.stores s\n  ON c.primary_store_id = s.store_id\nWHERE s.store_name <> 'Zava Retail Online'\nGROUP BY s.store_id, s.store_name\nORDER BY s.store_id;",
+        "SELECT s.store_id, s.store_name, COUNT(DISTINCT c.customer_id) AS customer_count_by_store\nFROM retail.customers c\nJOIN retail.stores s\n  ON c.primary_store_id = s.store_id\nWHERE s.store_name <> 'Zava Retail Online'\nGROUP BY s.store_id, s.store_name\nORDER BY customer_count_by_store DESC, s.store_id;"
+    ]
+}

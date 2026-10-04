@@ -1,0 +1,741 @@
+{
+    "report_id": "ed5344dc-fde1-407e-9615-2a869a68dff8",
+    "user_id": "e7f8a9b0-c1d2-3e4f-5678-90abcdef1234",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare co-purchase patterns across store locations and seasonal periods to reveal location- and season-specific buying behavior.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare co-purchase patterns across store locations and seasonal periods to reveal location- and season-specific buying behavior.",
+    "timestamp": "2026-09-29 03:33:57",
+    "executed_sql_queries": [
+        "WITH filtered_orders AS (\n    SELECT DISTINCT o.order_id\n    FROM retail.orders o\n    WHERE o.order_date BETWEEN DATE '2020-01-01' AND DATE '2026-12-31'\n),\norder_pairs AS (\n    SELECT\n        oi1.order_id,\n        oi1.product_id AS product_id_1,\n        oi2.product_id AS product_id_2\n    FROM retail.order_items oi1\n    JOIN retail.order_items oi2\n      ON oi1.order_id = oi2.order_id\n     AND oi1.product_id < oi2.product_id\n    JOIN filtered_orders fo\n      ON fo.order_id = oi1.order_id\n),\npair_counts AS (\n    SELECT\n        product_id_1,\n        product_id_2,\n        COUNT(DISTINCT order_id) AS co_purchase_frequency\n    FROM order_pairs\n    GROUP BY product_id_1, product_id_2\n),\ntotal_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_order_count\n    FROM retail.orders\n    WHERE order_date BETWEEN DATE '2020-01-01' AND DATE '2026-12-31'\n)\nSELECT\n    p1.product_name AS product_name_1,\n    p2.product_name AS product_name_2,\n    pc.co_purchase_frequency,\n    ROUND(pc.co_purchase_frequency::numeric / NULLIF(to2.total_order_count, 0), 6) AS order_share,\n    RANK() OVER (ORDER BY pc.co_purchase_frequency DESC, p1.product_name, p2.product_name) AS bundle_rank\nFROM pair_counts pc\nJOIN retail.products p1 ON p1.product_id = pc.product_id_1\nJOIN retail.products p2 ON p2.product_id = pc.product_id_2\nCROSS JOIN total_orders to2\nORDER BY bundle_rank\nLIMIT 20;",
+        "SELECT store_id, store_name, is_online FROM retail.stores ORDER BY store_id;",
+        "WITH store_orders AS (\n    SELECT o.order_id, o.store_id, s.store_name\n    FROM retail.orders o\n    JOIN retail.stores s ON s.store_id = o.store_id\n    WHERE s.store_name IN (\n        'Zava Retail Seattle',\n        'Zava Retail Bellevue',\n        'Zava Retail Tacoma',\n        'Zava Retail Spokane',\n        'Zava Retail Everett',\n        'Zava Retail Redmond',\n        'Zava Retail Kirkland',\n        'Zava Retail Online'\n    )\n), store_order_counts AS (\n    SELECT store_id, COUNT(*) AS total_orders\n    FROM store_orders\n    GROUP BY store_id\n), pair_counts AS (\n    SELECT\n        so.store_id,\n        so.store_name,\n        oi1.product_id AS product_id_1,\n        oi2.product_id AS product_id_2,\n        COUNT(DISTINCT so.order_id) AS store_level_co_purchase_frequency\n    FROM store_orders so\n    JOIN retail.order_items oi1 ON oi1.order_id = so.order_id\n    JOIN retail.order_items oi2 ON oi2.order_id = so.order_id AND oi1.product_id < oi2.product_id\n    GROUP BY so.store_id, so.store_name, oi1.product_id, oi2.product_id\n), ranked AS (\n    SELECT\n        pc.*,\n        ROUND(pc.store_level_co_purchase_frequency::numeric / soc.total_orders, 6) AS store_level_order_share,\n        ROW_NUMBER() OVER (PARTITION BY pc.store_name ORDER BY pc.store_level_co_purchase_frequency DESC, pc.product_id_1, pc.product_id_2) AS rn\n    FROM pair_counts pc\n    JOIN store_order_counts soc ON soc.store_id = pc.store_id\n)\nSELECT\n    r.store_name,\n    p1.product_name AS product_name_1,\n    p2.product_name AS product_name_2,\n    r.store_level_co_purchase_frequency,\n    r.store_level_order_share\nFROM ranked r\nJOIN retail.products p1 ON p1.product_id = r.product_id_1\nJOIN retail.products p2 ON p2.product_id = r.product_id_2\nWHERE r.rn <= 10\nORDER BY r.store_name, r.store_level_co_purchase_frequency DESC, product_name_1, product_name_2;",
+        "WITH order_season AS (\n    SELECT\n        o.order_id,\n        CASE\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (12, 1, 2) THEN 'Winter'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (3, 4, 5) THEN 'Spring'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (6, 7, 8) THEN 'Summer'\n            ELSE 'Fall'\n        END AS season\n    FROM retail.orders o\n    WHERE o.order_date BETWEEN DATE '2020-01-01' AND DATE '2026-12-31'\n)\nSELECT season, COUNT(DISTINCT order_id) AS total_orders\nFROM order_season\nGROUP BY season\nORDER BY season;",
+        "WITH order_season AS (\n    SELECT\n        o.order_id,\n        CASE\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (12, 1, 2) THEN 'Winter'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (3, 4, 5) THEN 'Spring'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (6, 7, 8) THEN 'Summer'\n            ELSE 'Fall'\n        END AS season\n    FROM retail.orders o\n    WHERE o.order_date BETWEEN DATE '2020-01-01' AND DATE '2026-12-31'\n),\nseason_totals AS (\n    SELECT season, COUNT(DISTINCT order_id) AS total_orders\n    FROM order_season\n    GROUP BY season\n),\npairs AS (\n    SELECT\n        os.season,\n        oi1.product_id AS product_id_1,\n        oi2.product_id AS product_id_2,\n        COUNT(DISTINCT oi1.order_id) AS co_purchase_frequency\n    FROM order_season os\n    JOIN retail.order_items oi1\n      ON oi1.order_id = os.order_id\n    JOIN retail.order_items oi2\n      ON oi2.order_id = os.order_id\n     AND oi1.product_id < oi2.product_id\n    GROUP BY os.season, oi1.product_id, oi2.product_id\n),\nranked AS (\n    SELECT\n        p.season,\n        p.product_id_1,\n        pr1.product_name AS product_name_1,\n        p.product_id_2,\n        pr2.product_name AS product_name_2,\n        p.co_purchase_frequency,\n        ROUND(p.co_purchase_frequency::numeric / st.total_orders, 6) AS season_level_order_share,\n        DENSE_RANK() OVER (PARTITION BY p.season ORDER BY p.co_purchase_frequency DESC, p.product_id_1, p.product_id_2) AS bundle_rank\n    FROM pairs p\n    JOIN season_totals st ON st.season = p.season\n    JOIN retail.products pr1 ON pr1.product_id = p.product_id_1\n    JOIN retail.products pr2 ON pr2.product_id = p.product_id_2\n)\nSELECT *\nFROM ranked\nWHERE bundle_rank <= 10\nORDER BY season, bundle_rank, product_id_1, product_id_2;",
+        "WITH order_base AS (\n  SELECT\n    o.order_id,\n    s.store_name,\n    CASE\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'Winter'\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'Spring'\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'Summer'\n      ELSE 'Fall'\n    END AS season\n  FROM retail.orders o\n  JOIN retail.stores s ON s.store_id = o.store_id\n  WHERE o.order_date BETWEEN DATE '2020-01-01' AND DATE '2026-12-31'\n), pair_orders AS (\n  SELECT\n    ob.store_name,\n    ob.season,\n    oi1.order_id,\n    p1.product_name AS product_name_1,\n    p2.product_name AS product_name_2\n  FROM order_base ob\n  JOIN retail.order_items oi1 ON oi1.order_id = ob.order_id\n  JOIN retail.order_items oi2 ON oi2.order_id = ob.order_id AND oi1.product_id < oi2.product_id\n  JOIN retail.products p1 ON p1.product_id = oi1.product_id\n  JOIN retail.products p2 ON p2.product_id = oi2.product_id\n), pair_counts AS (\n  SELECT\n    store_name,\n    season,\n    product_name_1,\n    product_name_2,\n    COUNT(DISTINCT order_id) AS store_season_co_purchase_frequency\n  FROM pair_orders\n  GROUP BY store_name, season, product_name_1, product_name_2\n), store_season_totals AS (\n  SELECT\n    store_name,\n    season,\n    COUNT(DISTINCT order_id) AS total_orders\n  FROM order_base\n  GROUP BY store_name, season\n), ranked AS (\n  SELECT\n    pc.store_name,\n    pc.season,\n    pc.product_name_1,\n    pc.product_name_2,\n    pc.store_season_co_purchase_frequency,\n    ROUND(pc.store_season_co_purchase_frequency::numeric / NULLIF(sst.total_orders, 0), 6) AS store_season_order_share,\n    ROW_NUMBER() OVER (\n      PARTITION BY pc.store_name, pc.season\n      ORDER BY pc.store_season_co_purchase_frequency DESC, pc.product_name_1, pc.product_name_2\n    ) AS rn\n  FROM pair_counts pc\n  JOIN store_season_totals sst\n    ON sst.store_name = pc.store_name AND sst.season = pc.season\n)\nSELECT\n  store_name,\n  season,\n  product_name_1,\n  product_name_2,\n  store_season_co_purchase_frequency,\n  store_season_order_share\nFROM ranked\nWHERE rn <= 10\nORDER BY store_name, season, store_season_co_purchase_frequency DESC, product_name_1, product_name_2;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive summary:</strong> The strongest co-purchased bundle overall is <em>Wood Rasp Set + Digital Caliper 6-inch</em>, appearing <strong>7 times</strong> with an order share of <strong>0.001347</strong>. The next-best bundles are tied at <strong>6 co-purchases</strong>: <em>Ball Peen Hammer 12oz + Pipe Wrench Set</em> and <em>Precision Screwdriver Kit + Metric Hex Key Set</em> (each <strong>0.001155</strong> order share).</p><p><strong>Top bundle patterns:</strong></p><ul><li><strong>Precision/measuring tools</strong> recur frequently: <em>Digital Caliper 6-inch + Metric Hex Key Set</em>, <em>Precision Screwdriver Kit + T-Handle Hex Set</em>, and <em>Tape Measure 25-foot + Speed Square 7-inch</em>.</li><li><strong>Hand tool pairings</strong> are also strong, especially <em>Ball Peen Hammer 12oz + Pipe Wrench Set</em> and <em>Flathead Screwdriver Set + Riffler File Set</em>.</li><li><strong>Home improvement bundles</strong> show up consistently, such as <em>Bathroom Lavatory Faucet + PTFE Thread Tape White</em>, <em>Moisture Resistant Drywall + Fire Resistant Drywall</em>, and <em>Oil-Based Wood Stain + Paint Bucket Grid</em>.</li></ul><p><strong>Seasonal highlights:</strong> Spring and Summer show the clearest peak bundles. In <strong>Spring</strong>, <em>Tape Measure 25-foot + Speed Square 7-inch</em> leads with <strong>4 co-purchases</strong> and the highest seasonal share at <strong>0.003096</strong>. In <strong>Summer</strong>, two bundles tie for first at <strong>4 co-purchases</strong>: <em>Ball Peen Hammer 12oz + Pipe Wrench Set</em> and <em>Wood Rasp Set + Digital Caliper 6-inch</em>, each at <strong>0.003113</strong>.</p><p><strong>Store-level concentration:</strong> At <em>Zava Retail Redmond</em>, the same core bundles dominate, led by <em>Wood Rasp Set + Digital Caliper 6-inch</em> (<strong>7</strong>) and the two <strong>6-frequency</strong> bundles above. This suggests the strongest bundles are not isolated anomalies but repeatable cross-sell opportunities at the store level.</p><p><strong>Bottom line:</strong> The data points to a clear bundle strategy around <em>precision tools, measuring/layout tools, and complementary trade hardware</em>. The most actionable cross-sells are the top 3 bundles, especially those with <strong>6\u20137 co-purchases</strong> and order shares above <strong>0.0011</strong>.</p>",
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "bundle_rank",
+                    "product_name_1",
+                    "product_name_2",
+                    "co_purchase_frequency",
+                    "order_share"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Wood Rasp Set",
+                        "Digital Caliper 6-inch",
+                        "7",
+                        "0.001347"
+                    ],
+                    [
+                        "2",
+                        "Ball Peen Hammer 12oz",
+                        "Pipe Wrench Set",
+                        "6",
+                        "0.001155"
+                    ],
+                    [
+                        "3",
+                        "Precision Screwdriver Kit",
+                        "Metric Hex Key Set",
+                        "6",
+                        "0.001155"
+                    ],
+                    [
+                        "4",
+                        "Artist Detail Brush Set",
+                        "Metal Paint Tray 9-inch",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "5",
+                        "Bathroom Lavatory Faucet",
+                        "PTFE Thread Tape White",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "6",
+                        "Circular Saw 7-1/4 inch",
+                        "Track Saw",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "7",
+                        "Common Nail Assortment",
+                        "Countertop Support Bracket",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "8",
+                        "Compact Recip Saw",
+                        "Impact Wrench 1/2-inch",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "9",
+                        "Digital Caliper 6-inch",
+                        "Metric Hex Key Set",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "10",
+                        "Flathead Screwdriver Set",
+                        "Riffler File Set",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "11",
+                        "Garden Rake Steel Tines",
+                        "Herb Garden Seed Set",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "12",
+                        "Hardwood Mulch 2 Cu Ft",
+                        "Potting Mix Premium 40lb",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "13",
+                        "Insulated Screwdriver Set",
+                        "Speed Square 7-inch",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "14",
+                        "Moisture Resistant Drywall",
+                        "Fire Resistant Drywall",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "15",
+                        "Needle-Nose Pliers 6-inch",
+                        "Riffler File Set",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "16",
+                        "Oil-Based Wood Stain",
+                        "Paint Bucket Grid",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "17",
+                        "Phillips Screwdriver Set",
+                        "Precision Screwdriver Kit",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "18",
+                        "Precision Screwdriver Kit",
+                        "T-Handle Hex Set",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "19",
+                        "Synthetic Brush Set",
+                        "Floor Polyurethane",
+                        "5",
+                        "0.000962"
+                    ],
+                    [
+                        "20",
+                        "Tape Measure 25-foot",
+                        "Speed Square 7-inch",
+                        "5",
+                        "0.000962"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Redmond",
+                        "Seattle",
+                        "Bellevue",
+                        "Tacoma",
+                        "Spokane",
+                        "Everett",
+                        "Kirkland",
+                        "Online"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Top bundle frequency",
+                            "data": [
+                                7,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Second bundle frequency",
+                            "data": [
+                                6,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Third bundle frequency",
+                            "data": [
+                                6,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "borderColor": "rgba(75,192,192,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Other top bundles",
+                            "data": [
+                                32,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "borderColor": "rgba(255,159,64,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Comparison of Co-Purchase Patterns by Store Location"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Co-purchase frequency"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Store location"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Fall",
+                        "Spring",
+                        "Summer",
+                        "Winter"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Top bundle co-purchase frequency",
+                            "data": [
+                                3,
+                                4,
+                                4,
+                                4
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Top bundle order share (%)",
+                            "data": [
+                                0.2346,
+                                0.3096,
+                                0.3113,
+                                0.2983
+                            ],
+                            "backgroundColor": [
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.55)",
+                                "rgba(255,99,132,0.55)"
+                            ],
+                            "borderColor": [
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Comparison of Co-Purchase Patterns (2020-2026)"
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Season"
+                            },
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Frequency / Share"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Bundle / store-season concentration",
+                    "Where concentrated",
+                    "Pattern type",
+                    "Co-purchase frequency",
+                    "Order share"
+                ],
+                "rows": [
+                    [
+                        "Wood Rasp Set + Digital Caliper 6-inch",
+                        "Store: Zava Retail Redmond; Season: Summer",
+                        "Location-specific and season-specific",
+                        "7 overall; 4 in Redmond Summer",
+                        "0.001347 overall; 0.003113 in Redmond Summer"
+                    ],
+                    [
+                        "Ball Peen Hammer 12oz + Pipe Wrench Set",
+                        "Store: Zava Retail Redmond; Season: Summer",
+                        "Location-specific and season-specific",
+                        "6 overall; 4 in Redmond Summer",
+                        "0.001155 overall; 0.003113 in Redmond Summer"
+                    ],
+                    [
+                        "Precision Screwdriver Kit + Metric Hex Key Set",
+                        "Store: Zava Retail Redmond; Season: Summer",
+                        "Location-specific and season-specific",
+                        "6 overall; 3 in Redmond Summer",
+                        "0.001155 overall; 0.002335 in Redmond Summer"
+                    ],
+                    [
+                        "Digital Caliper 6-inch + Metric Hex Key Set",
+                        "Store: Zava Retail Redmond; Season: Summer",
+                        "Location-specific and season-specific",
+                        "5 overall; 3 in Redmond Summer",
+                        "0.000962 overall; 0.002335 in Redmond Summer"
+                    ],
+                    [
+                        "Flathead Screwdriver Set + Riffler File Set",
+                        "Store: Zava Retail Redmond; Season: Winter",
+                        "Location-specific and season-specific",
+                        "5 overall; 3 in Redmond Winter",
+                        "0.000962 overall; 0.002237 in Redmond Winter"
+                    ],
+                    [
+                        "Insulated Screwdriver Set + Speed Square 7-inch",
+                        "Store: Zava Retail Redmond; Season: Spring",
+                        "Location-specific and season-specific",
+                        "5 overall; 5 in Redmond overall; 5 in Redmond Spring",
+                        "0.000962 overall; 0.000962 in Redmond overall; 0.002322 in Redmond Spring"
+                    ],
+                    [
+                        "Needle-Nose Pliers 6-inch + Riffler File Set",
+                        "Store: Zava Retail Redmond; Season: Spring",
+                        "Location-specific and season-specific",
+                        "5 overall; 3 in Redmond Spring",
+                        "0.000962 overall; 0.002322 in Redmond Spring"
+                    ],
+                    [
+                        "Phillips Screwdriver Set + Precision Screwdriver Kit",
+                        "Store: Zava Retail Redmond; Season: Spring",
+                        "Location-specific and season-specific",
+                        "5 overall; 3 in Redmond Spring",
+                        "0.000962 overall; 0.002322 in Redmond Spring"
+                    ],
+                    [
+                        "Precision Screwdriver Kit + T-Handle Hex Set",
+                        "Store: Zava Retail Redmond; Season: Summer",
+                        "Location-specific and season-specific",
+                        "5 overall; 5 in Redmond overall; 3 in Redmond Summer",
+                        "0.000962 overall; 0.000962 in Redmond overall; 0.002335 in Redmond Summer"
+                    ],
+                    [
+                        "Tape Measure 25-foot + Speed Square 7-inch",
+                        "Store: Zava Retail Redmond; Season: Spring",
+                        "Location-specific and season-specific",
+                        "5 overall; 4 in Redmond Spring",
+                        "0.000962 overall; 0.003096 in Redmond Spring"
+                    ],
+                    [
+                        "Precision Screwdriver Kit + Tape Measure 25-foot",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Angled Brush Set + Metal Paint Tray 9-inch",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Baseboard Molding 8ft + Chair Rail Molding",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Ceramic Planter 12-inch + Organic Heirloom Seeds",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Crown Molding Pine 8ft + Chair Rail Molding",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Lightweight Drywall 4x8 + OSB Subflooring 4x8x3/4",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Metric Washer Assortment + Furniture Caster Set",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Oscillating Sprinkler + Cactus Potting Mix",
+                        "Store: Zava Retail Redmond; Season: Fall",
+                        "Location-specific and season-specific",
+                        "3 in Redmond Fall",
+                        "0.002346 in Redmond Fall"
+                    ],
+                    [
+                        "Wall Mount Cabinet + Magnetic Tool Holder",
+                        "Store: Zava Retail Redmond; Season: Winter",
+                        "Location-specific and season-specific",
+                        "4 in Redmond Winter",
+                        "0.002983 in Redmond Winter"
+                    ],
+                    [
+                        "Ball Peen Hammer 12oz + Sledge Hammer 3lb",
+                        "Season: Spring",
+                        "Season-specific",
+                        "3 in Spring",
+                        "0.002322 in Spring"
+                    ],
+                    [
+                        "Router Table Combo + Stationary Belt Sander",
+                        "Season: Spring",
+                        "Season-specific",
+                        "3 in Spring",
+                        "0.002322 in Spring"
+                    ],
+                    [
+                        "Zero VOC Interior Paint + Oil-Based Polyurethane",
+                        "Season: Spring",
+                        "Season-specific",
+                        "3 in Spring",
+                        "0.002322 in Spring"
+                    ],
+                    [
+                        "Exterior Acrylic Paint + Plastic Drop Cloth",
+                        "Season: Spring",
+                        "Season-specific",
+                        "3 in Spring",
+                        "0.002322 in Spring"
+                    ],
+                    [
+                        "Universal Bonding Primer + Oil-Based Wood Stain",
+                        "Season: Spring",
+                        "Season-specific",
+                        "3 in Spring",
+                        "0.002322 in Spring"
+                    ],
+                    [
+                        "Router Table Combo + Brushless Impact Driver",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Angled Brush Set + Metal Paint Tray 9-inch",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Metric Washer Assortment + Furniture Caster Set",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Pressure Treated 2x4x8 + Quarter Round 8ft",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Lightweight Drywall 4x8 + OSB Subflooring 4x8x3/4",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Crown Molding Pine 8ft + Chair Rail Molding",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Baseboard Molding 8ft + Chair Rail Molding",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Oscillating Sprinkler + Cactus Potting Mix",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Ceramic Planter 12-inch + Organic Heirloom Seeds",
+                        "Season: Fall",
+                        "Season-specific",
+                        "3 in Fall",
+                        "0.002346 in Fall"
+                    ],
+                    [
+                        "Sledge Hammer 3lb + Adjustable Wrench 10-inch",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Ratcheting Screwdriver + T-Handle Hex Set",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Pipe Wrench Set + Digital Caliper 6-inch",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Pipe Wrench Set + T-Handle Hex Set",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Speed Square 7-inch + Folding Rule 6-foot",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Digital Caliper 6-inch + T-Handle Hex Set",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Barrel Grip Jigsaw + Miter Saw Stand",
+                        "Season: Summer",
+                        "Season-specific",
+                        "3 in Summer",
+                        "0.002335 in Summer"
+                    ],
+                    [
+                        "Flathead Screwdriver Set + Wood Rasp Set",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "Riffler File Set + T-Handle Hex Set",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "Cordless Circular Saw 6-1/2 + Router Table Combo",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "Roofing Nails 1-1/4 inch + Swivel Caster 2-inch",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "Angle Bracket 4-inch + Swivel Caster 2-inch",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "GFCI Breaker 20-Amp + Twist-On Connectors",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "Soft Copper Coil 1/2-inch + PVC Tee Fitting Set",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ],
+                    [
+                        "Toilet Repair Kit Complete + Plumber's Grease",
+                        "Season: Winter",
+                        "Season-specific",
+                        "3 in Winter",
+                        "0.002237 in Winter"
+                    ]
+                ]
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Key merchandising takeaways:</strong> the strongest recurring co-purchase patterns are concentrated in a few tool-and-measurement bundles and a handful of seasonal project bundles. Across the full dataset, the top bundle is <em>Wood Rasp Set + Digital Caliper 6-inch</em> with <strong>7 co-purchases</strong> and an order share of <strong>0.1347%</strong>. Two bundles tie next at <strong>6 co-purchases</strong> each: <em>Ball Peen Hammer 12oz + Pipe Wrench Set</em> and <em>Precision Screwdriver Kit + Metric Hex Key Set</em> (each <strong>0.1155%</strong> order share).</p><p><strong>Store-level insight:</strong> Zava Retail Redmond mirrors the overall pattern almost exactly, indicating these bundles are not isolated anomalies. Redmond\u2019s top bundle is also <em>Wood Rasp Set + Digital Caliper 6-inch</em> at <strong>7</strong>, followed by the same two <strong>6-order</strong> bundles. This suggests a strong opportunity for <strong>store-specific endcaps, cross-sell prompts, and \u201cfrequently bought together\u201d online placement</strong> in Redmond for precision tools, wrenching, and screwdriver/hex assortments.</p><p><strong>Seasonal opportunities:</strong></p><ul><li><strong>Spring:</strong> the highest seasonal bundle is <em>Tape Measure 25-foot + Speed Square 7-inch</em> with <strong>4 co-purchases</strong> and the highest seasonal order share at <strong>0.3096%</strong>. This is a clear candidate for framing/carpentry promo packs.</li><li><strong>Summer:</strong> two bundles lead at <strong>4 co-purchases</strong> each: <em>Ball Peen Hammer 12oz + Pipe Wrench Set</em> and <em>Wood Rasp Set + Digital Caliper 6-inch</em>, both at <strong>0.3113%</strong>. Summer messaging should emphasize repair, plumbing, and precision-measurement kits.</li><li><strong>Fall:</strong> the top bundle is <em>Precision Screwdriver Kit + Tape Measure 25-foot</em> at <strong>3 co-purchases</strong> and <strong>0.2346%</strong>. Fall also shows strong home-improvement and garden pairings such as <em>Angled Brush Set + Metal Paint Tray 9-inch</em> and <em>Ceramic Planter 12-inch + Organic Heirloom Seeds</em>.</li><li><strong>Winter:</strong> the leading bundle is <em>Wall Mount Cabinet + Magnetic Tool Holder</em> with <strong>4 co-purchases</strong> and <strong>0.2983%</strong>. Winter is the best season for storage/organization bundles and electrical/plumbing maintenance add-ons.</li></ul><p><strong>Actionable recommendations:</strong></p><ul><li><strong>Bundle precision tools together year-round:</strong> promote <em>Digital Caliper 6-inch</em>, <em>Metric Hex Key Set</em>, <em>T-Handle Hex Set</em>, and <em>Precision Screwdriver Kit</em> as a family. These appear repeatedly in both overall and Redmond results.</li><li><strong>Build seasonal kits:</strong> Spring carpentry kit (<em>Tape Measure + Speed Square</em>), Summer repair kit (<em>Pipe Wrench + Ball Peen Hammer</em>), Fall finishing kit (<em>Brush Set + Paint Tray</em>), Winter organization kit (<em>Wall Mount Cabinet + Magnetic Tool Holder</em>).</li><li><strong>Use store-specific signage in Redmond:</strong> prioritize the top 10 recurring bundles in aisle signage and POS recommendations, since Redmond matches the top overall bundles and shows repeated co-purchase frequencies of <strong>3 to 7</strong>.</li><li><strong>Cross-merchandise by project type:</strong> pair plumbing items (<em>PTFE Thread Tape</em>, <em>Pipe Wrench Set</em>, <em>Plumber's Grease</em>) and painting items (<em>Oil-Based Wood Stain</em>, <em>Paint Bucket Grid</em>, <em>Brush Set</em>) to increase attachment rate.</li></ul><p><strong>Bottom line:</strong> the best promotion strategy is a <em>seasonal bundle calendar</em> layered with <em>Redmond-specific precision-tool merchandising</em>. Focus on the highest-frequency pairs first, because the top bundles are recurring, measurable, and already proven by order-share signals between <strong>0.1155%</strong> and <strong>0.3113%</strong>.</p>",
+            "id": 6
+        }
+    ]
+}

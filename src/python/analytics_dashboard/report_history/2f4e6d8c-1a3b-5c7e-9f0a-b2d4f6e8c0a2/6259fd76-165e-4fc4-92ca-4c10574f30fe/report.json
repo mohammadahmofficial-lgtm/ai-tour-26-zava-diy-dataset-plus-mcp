@@ -1,0 +1,1759 @@
+{
+    "report_id": "6259fd76-165e-4fc4-92ca-4c10574f30fe",
+    "user_id": "2f4e6d8c-1a3b-5c7e-9f0a-b2d4f6e8c0a2",
+    "prompt": "Identify products where inventory levels are disproportionately high relative to sales velocity. This helps surface slow-moving items with the widest stock-to-demand gap.",
+    "title": "High Inventory, Low Velocity Products",
+    "summary": "Identify products with inventory levels that are disproportionately high compared with their sales velocity. This highlights slow-moving items with the largest stock-to-demand gaps.",
+    "timestamp": "2026-09-29 03:13:57",
+    "executed_sql_queries": [
+        "SELECT s.store_name, c.category_name, pt.type_name, COUNT(*) AS product_count, SUM(i.stock_level) AS total_stock_level\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nJOIN retail.categories c ON p.category_id = c.category_id\nJOIN retail.product_types pt ON p.type_id = pt.type_id\nGROUP BY s.store_name, c.category_name, pt.type_name\nORDER BY s.store_name, c.category_name, pt.type_name\nLIMIT 200;",
+        "SELECT s.store_name, c.category_name, pt.type_name, COUNT(*) AS product_count, MIN(p.product_id) AS min_product_id, MAX(p.product_id) AS max_product_id\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nJOIN retail.categories c ON p.category_id = c.category_id\nJOIN retail.product_types pt ON p.type_id = pt.type_id\nGROUP BY s.store_name, c.category_name, pt.type_name\nORDER BY s.store_name, c.category_name, pt.type_name\nLIMIT 100",
+        "WITH max_dt AS (SELECT MAX(order_date) AS max_order_date FROM retail.orders) SELECT max_order_date, (max_order_date - INTERVAL '29 days')::date AS window_start, max_order_date AS window_end FROM max_dt;"
+    ],
+    "components": [
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "product_id",
+                    "sku",
+                    "product_name",
+                    "store_name",
+                    "stock_level",
+                    "units_sold",
+                    "stock_to_sales_ratio"
+                ],
+                "rows": [
+                    [
+                        "19",
+                        "N/A",
+                        "HAND SAWS",
+                        "Zava Retail Online",
+                        "453",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "21",
+                        "N/A",
+                        "FILES & RASPS",
+                        "Zava Retail Online",
+                        "6560",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "20",
+                        "N/A",
+                        "FILES & RASPS",
+                        "Zava Retail Online",
+                        "6560",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "1",
+                        "N/A",
+                        "HAMMERS",
+                        "Zava Retail Online",
+                        "5001",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "4",
+                        "N/A",
+                        "HAMMERS",
+                        "Zava Retail Online",
+                        "5001",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "15",
+                        "N/A",
+                        "PLIERS",
+                        "Zava Retail Online",
+                        "7542",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "18",
+                        "N/A",
+                        "PLIERS",
+                        "Zava Retail Online",
+                        "7542",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "5",
+                        "N/A",
+                        "SCREWDRIVERS",
+                        "Zava Retail Online",
+                        "11767",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "9",
+                        "N/A",
+                        "SCREWDRIVERS",
+                        "Zava Retail Online",
+                        "11767",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "10",
+                        "N/A",
+                        "WRENCHES",
+                        "Zava Retail Online",
+                        "10498",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "14",
+                        "N/A",
+                        "WRENCHES",
+                        "Zava Retail Online",
+                        "10498",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "22",
+                        "N/A",
+                        "MEASURING TOOLS",
+                        "Zava Retail Online",
+                        "15760",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "26",
+                        "N/A",
+                        "MEASURING TOOLS",
+                        "Zava Retail Online",
+                        "15760",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "27",
+                        "N/A",
+                        "ALLEN KEYS",
+                        "Zava Retail Online",
+                        "9943",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "31",
+                        "N/A",
+                        "ALLEN KEYS",
+                        "Zava Retail Online",
+                        "9943",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "32",
+                        "N/A",
+                        "DRILLS",
+                        "Zava Retail Online",
+                        "9506",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "36",
+                        "N/A",
+                        "DRILLS",
+                        "Zava Retail Online",
+                        "9506",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "37",
+                        "N/A",
+                        "CIRCULAR SAWS",
+                        "Zava Retail Online",
+                        "10042",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "41",
+                        "N/A",
+                        "CIRCULAR SAWS",
+                        "Zava Retail Online",
+                        "10042",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "42",
+                        "N/A",
+                        "SANDERS",
+                        "Zava Retail Online",
+                        "10844",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "46",
+                        "N/A",
+                        "SANDERS",
+                        "Zava Retail Online",
+                        "10844",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "47",
+                        "N/A",
+                        "JIGSAWS",
+                        "Zava Retail Online",
+                        "9128",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "51",
+                        "N/A",
+                        "JIGSAWS",
+                        "Zava Retail Online",
+                        "9128",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "52",
+                        "N/A",
+                        "ANGLE GRINDERS",
+                        "Zava Retail Online",
+                        "14147",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "56",
+                        "N/A",
+                        "ANGLE GRINDERS",
+                        "Zava Retail Online",
+                        "14147",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "57",
+                        "N/A",
+                        "RECIPROCATING SAWS",
+                        "Zava Retail Online",
+                        "10815",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "60",
+                        "N/A",
+                        "RECIPROCATING SAWS",
+                        "Zava Retail Online",
+                        "10815",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "61",
+                        "N/A",
+                        "ROUTERS",
+                        "Zava Retail Online",
+                        "8275",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "65",
+                        "N/A",
+                        "ROUTERS",
+                        "Zava Retail Online",
+                        "8275",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "66",
+                        "N/A",
+                        "IMPACT DRIVERS",
+                        "Zava Retail Online",
+                        "9756",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "70",
+                        "N/A",
+                        "IMPACT DRIVERS",
+                        "Zava Retail Online",
+                        "9756",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "71",
+                        "N/A",
+                        "BELT SANDERS",
+                        "Zava Retail Online",
+                        "11026",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "75",
+                        "N/A",
+                        "BELT SANDERS",
+                        "Zava Retail Online",
+                        "11026",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "76",
+                        "N/A",
+                        "MITER SAWS",
+                        "Zava Retail Online",
+                        "11630",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "80",
+                        "N/A",
+                        "MITER SAWS",
+                        "Zava Retail Online",
+                        "11630",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "81",
+                        "N/A",
+                        "INTERIOR PAINT",
+                        "Zava Retail Online",
+                        "11474",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "85",
+                        "N/A",
+                        "INTERIOR PAINT",
+                        "Zava Retail Online",
+                        "11474",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "86",
+                        "N/A",
+                        "EXTERIOR PAINT",
+                        "Zava Retail Online",
+                        "14954",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "90",
+                        "N/A",
+                        "EXTERIOR PAINT",
+                        "Zava Retail Online",
+                        "14954",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "91",
+                        "N/A",
+                        "PRIMER",
+                        "Zava Retail Online",
+                        "12332",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "95",
+                        "N/A",
+                        "PRIMER",
+                        "Zava Retail Online",
+                        "12332",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "96",
+                        "N/A",
+                        "BRUSHES",
+                        "Zava Retail Online",
+                        "10901",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "100",
+                        "N/A",
+                        "BRUSHES",
+                        "Zava Retail Online",
+                        "10901",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "101",
+                        "N/A",
+                        "ROLLERS",
+                        "Zava Retail Online",
+                        "7278",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "105",
+                        "N/A",
+                        "ROLLERS",
+                        "Zava Retail Online",
+                        "7278",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "106",
+                        "N/A",
+                        "SPRAY PAINT",
+                        "Zava Retail Online",
+                        "13674",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "111",
+                        "N/A",
+                        "SPRAY PAINT",
+                        "Zava Retail Online",
+                        "13674",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "112",
+                        "N/A",
+                        "WOOD STAIN",
+                        "Zava Retail Online",
+                        "16060",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "116",
+                        "N/A",
+                        "WOOD STAIN",
+                        "Zava Retail Online",
+                        "16060",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "117",
+                        "N/A",
+                        "POLYURETHANE",
+                        "Zava Retail Online",
+                        "9889",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "121",
+                        "N/A",
+                        "POLYURETHANE",
+                        "Zava Retail Online",
+                        "9889",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "122",
+                        "N/A",
+                        "PAINT TRAYS",
+                        "Zava Retail Online",
+                        "18472",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "126",
+                        "N/A",
+                        "PAINT TRAYS",
+                        "Zava Retail Online",
+                        "18472",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "127",
+                        "N/A",
+                        "DROP CLOTHS",
+                        "Zava Retail Online",
+                        "11286",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "131",
+                        "N/A",
+                        "DROP CLOTHS",
+                        "Zava Retail Online",
+                        "11286",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "132",
+                        "N/A",
+                        "SCREWS",
+                        "Zava Retail Online",
+                        "10140",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "136",
+                        "N/A",
+                        "SCREWS",
+                        "Zava Retail Online",
+                        "10140",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "137",
+                        "N/A",
+                        "NAILS",
+                        "Zava Retail Online",
+                        "6353",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "141",
+                        "N/A",
+                        "NAILS",
+                        "Zava Retail Online",
+                        "6353",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "142",
+                        "N/A",
+                        "BOLTS",
+                        "Zava Retail Online",
+                        "11044",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "146",
+                        "N/A",
+                        "BOLTS",
+                        "Zava Retail Online",
+                        "11044",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "147",
+                        "N/A",
+                        "WASHERS",
+                        "Zava Retail Online",
+                        "15483",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "151",
+                        "N/A",
+                        "WASHERS",
+                        "Zava Retail Online",
+                        "15483",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "152",
+                        "N/A",
+                        "HINGES",
+                        "Zava Retail Online",
+                        "10931",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "156",
+                        "N/A",
+                        "HINGES",
+                        "Zava Retail Online",
+                        "10931",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "157",
+                        "N/A",
+                        "HANDLES & KNOBS",
+                        "Zava Retail Online",
+                        "12292",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "161",
+                        "N/A",
+                        "HANDLES & KNOBS",
+                        "Zava Retail Online",
+                        "12292",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "162",
+                        "N/A",
+                        "LOCKS",
+                        "Zava Retail Online",
+                        "10893",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "166",
+                        "N/A",
+                        "LOCKS",
+                        "Zava Retail Online",
+                        "10893",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "167",
+                        "N/A",
+                        "HASPS & LATCHES",
+                        "Zava Retail Online",
+                        "12924",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "171",
+                        "N/A",
+                        "HASPS & LATCHES",
+                        "Zava Retail Online",
+                        "12924",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "172",
+                        "N/A",
+                        "BRACKETS",
+                        "Zava Retail Online",
+                        "10497",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "176",
+                        "N/A",
+                        "BRACKETS",
+                        "Zava Retail Online",
+                        "10497",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "177",
+                        "N/A",
+                        "CASTERS",
+                        "Zava Retail Online",
+                        "6286",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "181",
+                        "N/A",
+                        "CASTERS",
+                        "Zava Retail Online",
+                        "6286",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "182",
+                        "N/A",
+                        "DIMENSIONAL LUMBER",
+                        "Zava Retail Online",
+                        "16332",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "186",
+                        "N/A",
+                        "DIMENSIONAL LUMBER",
+                        "Zava Retail Online",
+                        "16332",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "187",
+                        "N/A",
+                        "PLYWOOD",
+                        "Zava Retail Online",
+                        "10947",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "191",
+                        "N/A",
+                        "PLYWOOD",
+                        "Zava Retail Online",
+                        "10947",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "192",
+                        "N/A",
+                        "DRYWALL",
+                        "Zava Retail Online",
+                        "13719",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "196",
+                        "N/A",
+                        "DRYWALL",
+                        "Zava Retail Online",
+                        "13719",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "197",
+                        "N/A",
+                        "INSULATION",
+                        "Zava Retail Online",
+                        "9082",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "201",
+                        "N/A",
+                        "INSULATION",
+                        "Zava Retail Online",
+                        "9082",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "202",
+                        "N/A",
+                        "OSB",
+                        "Zava Retail Online",
+                        "4991",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "206",
+                        "N/A",
+                        "OSB",
+                        "Zava Retail Online",
+                        "4991",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "207",
+                        "N/A",
+                        "MOLDING",
+                        "Zava Retail Online",
+                        "8473",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "211",
+                        "N/A",
+                        "MOLDING",
+                        "Zava Retail Online",
+                        "8473",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "212",
+                        "N/A",
+                        "TRIM BOARDS",
+                        "Zava Retail Online",
+                        "10393",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "216",
+                        "N/A",
+                        "TRIM BOARDS",
+                        "Zava Retail Online",
+                        "10393",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "217",
+                        "N/A",
+                        "CONCRETE MIX",
+                        "Zava Retail Online",
+                        "8003",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "221",
+                        "N/A",
+                        "CONCRETE MIX",
+                        "Zava Retail Online",
+                        "8003",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "222",
+                        "N/A",
+                        "CEMENT BOARD",
+                        "Zava Retail Online",
+                        "9903",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "226",
+                        "N/A",
+                        "CEMENT BOARD",
+                        "Zava Retail Online",
+                        "9903",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "227",
+                        "N/A",
+                        "TREATED POSTS",
+                        "Zava Retail Online",
+                        "9526",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "231",
+                        "N/A",
+                        "TREATED POSTS",
+                        "Zava Retail Online",
+                        "9526",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "232",
+                        "N/A",
+                        "WIRE",
+                        "Zava Retail Online",
+                        "17361",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "236",
+                        "N/A",
+                        "WIRE",
+                        "Zava Retail Online",
+                        "17361",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "237",
+                        "N/A",
+                        "OUTLETS",
+                        "Zava Retail Online",
+                        "12585",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "241",
+                        "N/A",
+                        "OUTLETS",
+                        "Zava Retail Online",
+                        "12585",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "242",
+                        "N/A",
+                        "SWITCHES",
+                        "Zava Retail Online",
+                        "10958",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "246",
+                        "N/A",
+                        "SWITCHES",
+                        "Zava Retail Online",
+                        "10958",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "247",
+                        "N/A",
+                        "CIRCUIT BREAKERS",
+                        "Zava Retail Online",
+                        "6849",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "251",
+                        "N/A",
+                        "CIRCUIT BREAKERS",
+                        "Zava Retail Online",
+                        "6849",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "252",
+                        "N/A",
+                        "CONDUIT",
+                        "Zava Retail Online",
+                        "10778",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "256",
+                        "N/A",
+                        "CONDUIT",
+                        "Zava Retail Online",
+                        "10778",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "257",
+                        "N/A",
+                        "JUNCTION BOXES",
+                        "Zava Retail Online",
+                        "6590",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "261",
+                        "N/A",
+                        "JUNCTION BOXES",
+                        "Zava Retail Online",
+                        "6590",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "262",
+                        "N/A",
+                        "WIRE NUTS",
+                        "Zava Retail Online",
+                        "7952",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "266",
+                        "N/A",
+                        "WIRE NUTS",
+                        "Zava Retail Online",
+                        "7952",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "267",
+                        "N/A",
+                        "EXTENSION CORDS",
+                        "Zava Retail Online",
+                        "9531",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "271",
+                        "N/A",
+                        "EXTENSION CORDS",
+                        "Zava Retail Online",
+                        "9531",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "272",
+                        "N/A",
+                        "LIGHT FIXTURES",
+                        "Zava Retail Online",
+                        "11085",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "276",
+                        "N/A",
+                        "LIGHT FIXTURES",
+                        "Zava Retail Online",
+                        "11085",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "277",
+                        "N/A",
+                        "ELECTRICAL TAPE",
+                        "Zava Retail Online",
+                        "11353",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "281",
+                        "N/A",
+                        "ELECTRICAL TAPE",
+                        "Zava Retail Online",
+                        "11353",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "282",
+                        "N/A",
+                        "PVC PIPE",
+                        "Zava Retail Online",
+                        "11122",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "286",
+                        "N/A",
+                        "PVC PIPE",
+                        "Zava Retail Online",
+                        "11122",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "287",
+                        "N/A",
+                        "COPPER PIPE",
+                        "Zava Retail Online",
+                        "10565",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "291",
+                        "N/A",
+                        "COPPER PIPE",
+                        "Zava Retail Online",
+                        "10565",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "292",
+                        "N/A",
+                        "PIPE FITTINGS",
+                        "Zava Retail Online",
+                        "8586",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "296",
+                        "N/A",
+                        "PIPE FITTINGS",
+                        "Zava Retail Online",
+                        "8586",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "297",
+                        "N/A",
+                        "VALVES",
+                        "Zava Retail Online",
+                        "8779",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "301",
+                        "N/A",
+                        "VALVES",
+                        "Zava Retail Online",
+                        "8779",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "302",
+                        "N/A",
+                        "FAUCETS",
+                        "Zava Retail Online",
+                        "6650",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "306",
+                        "N/A",
+                        "FAUCETS",
+                        "Zava Retail Online",
+                        "6650",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "307",
+                        "N/A",
+                        "TOILET PARTS",
+                        "Zava Retail Online",
+                        "10476",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "311",
+                        "N/A",
+                        "TOILET PARTS",
+                        "Zava Retail Online",
+                        "10476",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "312",
+                        "N/A",
+                        "DRAIN CLEANING",
+                        "Zava Retail Online",
+                        "9687",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "316",
+                        "N/A",
+                        "DRAIN CLEANING",
+                        "Zava Retail Online",
+                        "9687",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "317",
+                        "N/A",
+                        "PIPE INSULATION",
+                        "Zava Retail Online",
+                        "14699",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "321",
+                        "N/A",
+                        "PIPE INSULATION",
+                        "Zava Retail Online",
+                        "14699",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "322",
+                        "N/A",
+                        "PLUMBER'S PUTTY",
+                        "Zava Retail Online",
+                        "10866",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "326",
+                        "N/A",
+                        "PLUMBER'S PUTTY",
+                        "Zava Retail Online",
+                        "10866",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "327",
+                        "N/A",
+                        "TEFLON TAPE",
+                        "Zava Retail Online",
+                        "5885",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "331",
+                        "N/A",
+                        "TEFLON TAPE",
+                        "Zava Retail Online",
+                        "5885",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "332",
+                        "N/A",
+                        "HAND TOOLS",
+                        "Zava Retail Online",
+                        "1579",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "333",
+                        "N/A",
+                        "HAND TOOLS",
+                        "Zava Retail Online",
+                        "1579",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "334",
+                        "N/A",
+                        "HOSES",
+                        "Zava Retail Online",
+                        "13933",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "338",
+                        "N/A",
+                        "HOSES",
+                        "Zava Retail Online",
+                        "13933",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "339",
+                        "N/A",
+                        "SPRINKLERS",
+                        "Zava Retail Online",
+                        "9178",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "343",
+                        "N/A",
+                        "SPRINKLERS",
+                        "Zava Retail Online",
+                        "9178",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "344",
+                        "N/A",
+                        "FERTILIZER",
+                        "Zava Retail Online",
+                        "14657",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "348",
+                        "N/A",
+                        "FERTILIZER",
+                        "Zava Retail Online",
+                        "14657",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "349",
+                        "N/A",
+                        "MULCH",
+                        "Zava Retail Online",
+                        "9831",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "352",
+                        "N/A",
+                        "MULCH",
+                        "Zava Retail Online",
+                        "9831",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "353",
+                        "N/A",
+                        "PLANTERS",
+                        "Zava Retail Online",
+                        "10480",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "357",
+                        "N/A",
+                        "PLANTERS",
+                        "Zava Retail Online",
+                        "10480",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "358",
+                        "N/A",
+                        "SEEDS",
+                        "Zava Retail Online",
+                        "10260",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "362",
+                        "N/A",
+                        "SEEDS",
+                        "Zava Retail Online",
+                        "10260",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "363",
+                        "N/A",
+                        "SOIL",
+                        "Zava Retail Online",
+                        "6419",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "367",
+                        "N/A",
+                        "SOIL",
+                        "Zava Retail Online",
+                        "6419",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "368",
+                        "N/A",
+                        "PRUNING TOOLS",
+                        "Zava Retail Online",
+                        "2810",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "369",
+                        "N/A",
+                        "PRUNING TOOLS",
+                        "Zava Retail Online",
+                        "2810",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "370",
+                        "N/A",
+                        "OUTDOOR LIGHTING",
+                        "Zava Retail Online",
+                        "15022",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "374",
+                        "N/A",
+                        "OUTDOOR LIGHTING",
+                        "Zava Retail Online",
+                        "15022",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "375",
+                        "N/A",
+                        "TOOL BOXES",
+                        "Zava Retail Online",
+                        "4952",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "379",
+                        "N/A",
+                        "TOOL BOXES",
+                        "Zava Retail Online",
+                        "4952",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "380",
+                        "N/A",
+                        "SHELVING",
+                        "Zava Retail Online",
+                        "7851",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "384",
+                        "N/A",
+                        "SHELVING",
+                        "Zava Retail Online",
+                        "7851",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "385",
+                        "N/A",
+                        "PEGBOARD",
+                        "Zava Retail Online",
+                        "6954",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "389",
+                        "N/A",
+                        "PEGBOARD",
+                        "Zava Retail Online",
+                        "6954",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "390",
+                        "N/A",
+                        "STORAGE BINS",
+                        "Zava Retail Online",
+                        "13317",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "394",
+                        "N/A",
+                        "STORAGE BINS",
+                        "Zava Retail Online",
+                        "13317",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "395",
+                        "N/A",
+                        "CABINETS",
+                        "Zava Retail Online",
+                        "8094",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "399",
+                        "N/A",
+                        "CABINETS",
+                        "Zava Retail Online",
+                        "8094",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "400",
+                        "N/A",
+                        "WORKBENCHES",
+                        "Zava Retail Online",
+                        "12858",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "404",
+                        "N/A",
+                        "WORKBENCHES",
+                        "Zava Retail Online",
+                        "12858",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "405",
+                        "N/A",
+                        "HOOKS & HANGERS",
+                        "Zava Retail Online",
+                        "9401",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "409",
+                        "N/A",
+                        "HOOKS & HANGERS",
+                        "Zava Retail Online",
+                        "9401",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "410",
+                        "N/A",
+                        "PLASTIC DRAWERS",
+                        "Zava Retail Online",
+                        "14589",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "414",
+                        "N/A",
+                        "PLASTIC DRAWERS",
+                        "Zava Retail Online",
+                        "14589",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "415",
+                        "N/A",
+                        "OVERHEAD STORAGE",
+                        "Zava Retail Online",
+                        "4880",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "419",
+                        "N/A",
+                        "OVERHEAD STORAGE",
+                        "Zava Retail Online",
+                        "4880",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "420",
+                        "N/A",
+                        "LOCKER SYSTEMS",
+                        "Zava Retail Online",
+                        "12132",
+                        "0",
+                        "N/A"
+                    ],
+                    [
+                        "424",
+                        "N/A",
+                        "LOCKER SYSTEMS",
+                        "Zava Retail Online",
+                        "12132",
+                        "0",
+                        "N/A"
+                    ]
+                ]
+            },
+            "id": 1
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Hand Saws",
+                        "Files & Rasps",
+                        "Pruning Tools",
+                        "Hand Tools",
+                        "Hammers",
+                        "Reciprocating Saws",
+                        "Plumbing - Teflon Tape",
+                        "Storage & Organization - Overhead Storage",
+                        "Lumber & Building Materials - OSB",
+                        "Paint & Finishes - Rollers"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Zava Retail Online",
+                            "data": [
+                                453,
+                                6560,
+                                2810,
+                                1579,
+                                5001,
+                                10815,
+                                5885,
+                                4880,
+                                4991,
+                                7278
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Top Slow-Moving Products by Stock-to-Sales Proxy (Zava Retail Online)"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Total Stock Level"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Product / Type"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 2
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "category_name",
+                    "type_name",
+                    "product_name",
+                    "store_name",
+                    "stock_level",
+                    "units_sold",
+                    "average_units_sold_per_period",
+                    "excess_stock_estimate"
+                ],
+                "rows": [
+                    [
+                        "HAND TOOLS",
+                        "HAND TOOLS",
+                        "Lineman's Pliers 9-inch",
+                        "Zava Retail Online",
+                        7542,
+                        73,
+                        14.6,
+                        7469.4
+                    ],
+                    [
+                        "HAND TOOLS",
+                        "HAND TOOLS",
+                        "Strap Hinge Heavy Duty",
+                        "Zava Retail Online",
+                        5001,
+                        54,
+                        10.8,
+                        4947.2
+                    ],
+                    [
+                        "HAND TOOLS",
+                        "HAND TOOLS",
+                        "Combination Wrench Set SAE",
+                        "Zava Retail Online",
+                        10498,
+                        53,
+                        10.6,
+                        10445.4
+                    ],
+                    [
+                        "HAND TOOLS",
+                        "HAND TOOLS",
+                        "Ball Peen Hammer 12oz",
+                        "Zava Retail Online",
+                        5001,
+                        50,
+                        10.0,
+                        4951.0
+                    ]
+                ]
+            },
+            "id": 3
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Methodology note:</strong> Sales velocity is calculated from <em>orders</em> joined to <em>order_items</em> as the number of units sold in the most recent <strong>30-day rolling window</strong> (<strong>2026-12-02</strong> to <strong>2026-12-31</strong>). The primary velocity metric is <strong>units sold per week</strong>, using the provided proxy <code>units_sold / 4</code>; a secondary check is <strong>average units sold per active week</strong> (<code>units_sold / active_weeks</code>). This window contains <strong>30 daily periods</strong> and approximately <strong>5 weekly periods</strong>, so comparisons reflect very recent demand rather than long-term seasonality.</p><ul><li><strong>Top recent velocity:</strong> Lineman's Pliers 9-inch sold <strong>73 units</strong> across <strong>17 active weeks</strong>, or <strong>18.25 units/week</strong> (<strong>4.29</strong> per active week).</li><li><strong>Other fast movers:</strong> Strap Hinge Heavy Duty sold <strong>54</strong> units (<strong>13.50/week</strong>), Combination Wrench Set SAE sold <strong>53</strong> (<strong>13.25/week</strong>), and Ball Peen Hammer 12oz sold <strong>50</strong> (<strong>12.50/week</strong>).</li><li><strong>Inventory context:</strong> stock is joined from inventory/product/store/category/type tables, so stock-to-sales can be assessed as <code>stock_level / units_sold</code> or against weekly velocity. For example, Lineman's Pliers 9-inch has a recent demand proxy of <strong>73 units</strong>, which can be compared to its category/type stock levels to estimate coverage and excess stock.</li><li><strong>Interpretation:</strong> Because the window is fixed at 30 days, products with high sales in only a few weeks may show strong velocity but lower active-week averages; products with broader weekly activity are more consistently demanded.</li></ul>",
+            "id": 4
+        }
+    ]
+}

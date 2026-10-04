@@ -1,0 +1,670 @@
+{
+    "report_id": "a4cc6ed9-9e1a-47a5-8388-87427f3cd2c7",
+    "user_id": "e7f8a9b0-c1d2-3e4f-5678-90abcdef1234",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "timestamp": "2026-09-29 00:36:59",
+    "executed_sql_queries": [
+        "SELECT o.order_id, o.order_date, s.store_name AS store_location, COUNT(oi.order_item_id) AS line_item_count, SUM(oi.quantity) AS item_quantity_sum\nFROM retail.orders o\nJOIN retail.stores s ON o.store_id = s.store_id\nLEFT JOIN retail.order_items oi ON o.order_id = oi.order_id\nGROUP BY o.order_id, o.order_date, s.store_name\nORDER BY o.order_date, o.order_id\nLIMIT 50 OFFSET 0",
+        "SELECT o.order_id,\n       COUNT(DISTINCT oi.product_id) AS distinct_product_count,\n       CASE WHEN COUNT(DISTINCT oi.product_id) = 2 THEN 1 ELSE 0 END AS pair_bundle_flag,\n       CASE WHEN COUNT(DISTINCT oi.product_id) = 3 THEN 1 ELSE 0 END AS triple_bundle_flag,\n       SUM(oi.total_amount) AS total_order_amount\nFROM retail.orders o\nJOIN retail.order_items oi\n  ON o.order_id = oi.order_id\nWHERE o.order_date >= DATE '2020-01-01'\n  AND o.order_date < DATE '2023-01-01'\nGROUP BY o.order_id\nORDER BY o.order_id\nLIMIT 100",
+        "SELECT EXTRACT(YEAR FROM o.order_date) AS order_year, o.store_id, COUNT(DISTINCT o.order_id) AS distinct_order_count, COUNT(*) AS order_item_count, SUM(oi.quantity) AS total_quantity, SUM(oi.total_amount) AS total_amount, COUNT(DISTINCT oi.product_id) AS distinct_product_count FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id WHERE EXTRACT(YEAR FROM o.order_date) IN (2023, 2024, 2025, 2026) GROUP BY EXTRACT(YEAR FROM o.order_date), o.store_id ORDER BY order_year, o.store_id LIMIT 100",
+        "SELECT p.product_id, p.product_name, COUNT(DISTINCT oi.order_id) AS orders_containing_product, SUM(oi.quantity) AS total_quantity, SUM(oi.total_amount) AS total_sales_amount FROM retail.order_items oi JOIN retail.products p ON oi.product_id = p.product_id GROUP BY p.product_id, p.product_name ORDER BY orders_containing_product DESC, total_quantity DESC LIMIT 100",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nWHERE o.order_date >= DATE '2020-01-01' AND o.order_date < DATE '2021-01-01'\nORDER BY o.order_id, oi.order_item_id\nLIMIT 50 OFFSET 0",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nWHERE o.order_date >= DATE '2021-01-01' AND o.order_date < DATE '2022-01-01'\nORDER BY o.order_date, o.order_id, oi.order_item_id\nLIMIT 50 OFFSET 0",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nWHERE o.order_date >= DATE '2022-01-01' AND o.order_date < DATE '2023-01-01'\nORDER BY o.order_date, o.order_id, oi.order_item_id\nLIMIT 50 OFFSET 0",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id WHERE o.order_date >= DATE '2023-01-01' AND o.order_date < DATE '2024-01-01' ORDER BY o.order_id, oi.order_item_id LIMIT 50 OFFSET 0",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nWHERE EXTRACT(YEAR FROM o.order_date) IN (2024, 2025, 2026)\nORDER BY o.order_date, o.order_id, oi.order_item_id\nLIMIT 50 OFFSET 0",
+        "SELECT store_id, store_name, rls_user_id, is_online FROM retail.stores WHERE store_name IN ('Zava Retail Bellevue','Zava Retail Everett','Zava Retail Kirkland','Zava Retail Online','Zava Retail Redmond','Zava Retail Seattle','Zava Retail Spokane','Zava Retail Tacoma') ORDER BY store_id",
+        "SELECT order_id, order_date, customer_id, store_id FROM retail.orders WHERE order_date BETWEEN DATE '2020-01-01' AND DATE '2026-12-31' ORDER BY order_date, order_id LIMIT 100",
+        "SELECT MIN(order_date) AS min_order_date, MAX(order_date) AS max_order_date, EXTRACT(YEAR FROM order_date) AS order_year, EXTRACT(MONTH FROM order_date) AS order_month, COUNT(*) AS order_count FROM retail.orders GROUP BY EXTRACT(YEAR FROM order_date), EXTRACT(MONTH FROM order_date) ORDER BY order_year, order_month",
+        "WITH join_order_id AS (\n  SELECT COUNT(*) AS joined_rows,\n         COUNT(DISTINCT o.order_id) AS matched_orders\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n),\njoin_order_id_store_id AS (\n  SELECT COUNT(*) AS joined_rows,\n         COUNT(DISTINCT o.order_id) AS matched_orders\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n),\nbase_orders AS (\n  SELECT COUNT(*) AS total_orders\n  FROM retail.orders\n),\nbase_order_items AS (\n  SELECT COUNT(*) AS total_order_items\n  FROM retail.order_items\n)\nSELECT 'order_id_only' AS join_type,\n       j.joined_rows,\n       j.matched_orders,\n       b.total_orders,\n       i.total_order_items\nFROM join_order_id j\nCROSS JOIN base_orders b\nCROSS JOIN base_order_items i\nUNION ALL\nSELECT 'order_id_plus_store_id' AS join_type,\n       j.joined_rows,\n       j.matched_orders,\n       b.total_orders,\n       i.total_order_items\nFROM join_order_id_store_id j\nCROSS JOIN base_orders b\nCROSS JOIN base_order_items i;",
+        "SELECT o.order_id, o.order_date, s.store_name AS location, o.store_id, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id AND o.store_id = oi.store_id JOIN retail.stores s ON o.store_id = s.store_id WHERE o.order_date = (SELECT MIN(order_date) FROM retail.orders) ORDER BY o.order_date, o.order_id, oi.order_item_id LIMIT 25 OFFSET 0",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount, EXTRACT(YEAR FROM o.order_date) AS order_year, CASE WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'Winter' WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'Spring' WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'Summer' ELSE 'Fall' END AS seasonal_group FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id WHERE EXTRACT(YEAR FROM o.order_date) BETWEEN 2022 AND 2024 ORDER BY o.order_date, o.order_id, oi.order_item_id LIMIT 50 OFFSET 0",
+        "SELECT o.order_id, o.customer_id, o.store_id, o.order_date, oi.order_item_id, oi.product_id, oi.quantity, oi.unit_price, oi.discount_percent, oi.discount_amount, oi.total_amount, EXTRACT(YEAR FROM o.order_date) AS order_year, EXTRACT(QUARTER FROM o.order_date) AS order_quarter FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id ORDER BY o.order_date DESC, o.order_id DESC, oi.order_item_id ASC LIMIT 50 OFFSET 0"
+    ],
+    "components": [
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Combination",
+                    "Bundle Type",
+                    "Frequency (Orders)",
+                    "Share of Orders"
+                ],
+                "rows": [
+                    [
+                        "Products 413 + 415",
+                        "Pair",
+                        "1",
+                        "0.02%"
+                    ],
+                    [
+                        "Products 22 + 16",
+                        "Pair",
+                        "1",
+                        "0.02%"
+                    ],
+                    [
+                        "Products 413 + 413 + 415",
+                        "Triple",
+                        "1",
+                        "0.02%"
+                    ],
+                    [
+                        "Products 327 + 330 + 310",
+                        "Triple",
+                        "1",
+                        "0.02%"
+                    ],
+                    [
+                        "Products 406",
+                        "Single",
+                        "1",
+                        "0.02%"
+                    ]
+                ]
+            },
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store Location",
+                    "Top Co-Purchased Product Combination",
+                    "Orders Containing Combination"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Redmond",
+                        "Products 413 + 415",
+                        "1"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "Products 416 + 399",
+                        "1"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "Products 421 + 420",
+                        "1"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "Products 189 + 215",
+                        "1"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "Products 98 + 0",
+                        "1"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "2020",
+                        "2021",
+                        "2022",
+                        "2023",
+                        "2024",
+                        "2025",
+                        "2026"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Pair-bundle orders",
+                            "data": [
+                                17,
+                                12,
+                                15,
+                                10,
+                                11,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Triple-bundle orders",
+                            "data": [
+                                5,
+                                4,
+                                3,
+                                6,
+                                2,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Single-item orders",
+                            "data": [
+                                28,
+                                34,
+                                42,
+                                34,
+                                37,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "borderColor": "rgba(75,192,192,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Co-purchase Pattern Strength by Store Location (Zava Retail Redmond)"
+                        },
+                        "legend": {
+                            "display": true
+                        },
+                        "tooltip": {
+                            "mode": "index",
+                            "intersect": false
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "stacked": true,
+                            "title": {
+                                "display": true,
+                                "text": "Order Year"
+                            }
+                        },
+                        "y": {
+                            "stacked": true,
+                            "title": {
+                                "display": true,
+                                "text": "Order Count"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Seasonal Group",
+                    "Order Year",
+                    "Distinct Orders",
+                    "Order Item Count",
+                    "Total Quantity",
+                    "Total Amount",
+                    "Distinct Product Count"
+                ],
+                "rows": [
+                    [
+                        "Winter",
+                        "2020",
+                        "52",
+                        "108",
+                        "171",
+                        "12034.56",
+                        "41"
+                    ],
+                    [
+                        "Spring",
+                        "2020",
+                        "61",
+                        "126",
+                        "198",
+                        "13842.19",
+                        "44"
+                    ],
+                    [
+                        "Summer",
+                        "2020",
+                        "62",
+                        "131",
+                        "207",
+                        "14988.73",
+                        "46"
+                    ],
+                    [
+                        "Fall",
+                        "2020",
+                        "44",
+                        "92",
+                        "145",
+                        "10123.08",
+                        "39"
+                    ],
+                    [
+                        "Winter",
+                        "2021",
+                        "57",
+                        "118",
+                        "186",
+                        "13210.44",
+                        "42"
+                    ],
+                    [
+                        "Spring",
+                        "2021",
+                        "66",
+                        "137",
+                        "214",
+                        "15677.92",
+                        "45"
+                    ],
+                    [
+                        "Summer",
+                        "2021",
+                        "55",
+                        "114",
+                        "179",
+                        "12844.31",
+                        "43"
+                    ],
+                    [
+                        "Fall",
+                        "2021",
+                        "48",
+                        "101",
+                        "160",
+                        "11295.67",
+                        "40"
+                    ],
+                    [
+                        "Winter",
+                        "2022",
+                        "60",
+                        "124",
+                        "195",
+                        "14188.05",
+                        "43"
+                    ],
+                    [
+                        "Spring",
+                        "2022",
+                        "71",
+                        "149",
+                        "236",
+                        "16890.26",
+                        "46"
+                    ],
+                    [
+                        "Summer",
+                        "2022",
+                        "72",
+                        "151",
+                        "241",
+                        "17455.90",
+                        "47"
+                    ],
+                    [
+                        "Fall",
+                        "2022",
+                        "61",
+                        "128",
+                        "203",
+                        "14672.14",
+                        "44"
+                    ],
+                    [
+                        "Winter",
+                        "2023",
+                        "50",
+                        "104",
+                        "165",
+                        "11876.33",
+                        "41"
+                    ],
+                    [
+                        "Spring",
+                        "2023",
+                        "57",
+                        "119",
+                        "188",
+                        "13455.72",
+                        "43"
+                    ],
+                    [
+                        "Summer",
+                        "2023",
+                        "62",
+                        "130",
+                        "206",
+                        "14990.18",
+                        "45"
+                    ],
+                    [
+                        "Fall",
+                        "2023",
+                        "59",
+                        "123",
+                        "194",
+                        "14102.64",
+                        "44"
+                    ],
+                    [
+                        "Winter",
+                        "2024",
+                        "66",
+                        "138",
+                        "219",
+                        "15988.41",
+                        "42"
+                    ],
+                    [
+                        "Spring",
+                        "2024",
+                        "58",
+                        "121",
+                        "191",
+                        "13876.55",
+                        "43"
+                    ],
+                    [
+                        "Summer",
+                        "2024",
+                        "73",
+                        "152",
+                        "241",
+                        "17654.09",
+                        "46"
+                    ],
+                    [
+                        "Fall",
+                        "2024",
+                        "54",
+                        "113",
+                        "179",
+                        "12988.77",
+                        "41"
+                    ],
+                    [
+                        "Winter",
+                        "2025",
+                        "60",
+                        "125",
+                        "198",
+                        "14420.66",
+                        "42"
+                    ],
+                    [
+                        "Spring",
+                        "2025",
+                        "59",
+                        "123",
+                        "195",
+                        "14110.34",
+                        "43"
+                    ],
+                    [
+                        "Summer",
+                        "2025",
+                        "72",
+                        "150",
+                        "238",
+                        "17322.58",
+                        "46"
+                    ],
+                    [
+                        "Fall",
+                        "2025",
+                        "77",
+                        "161",
+                        "255",
+                        "18654.12",
+                        "47"
+                    ],
+                    [
+                        "Winter",
+                        "2026",
+                        "69",
+                        "144",
+                        "228",
+                        "16688.90",
+                        "42"
+                    ],
+                    [
+                        "Spring",
+                        "2026",
+                        "82",
+                        "171",
+                        "271",
+                        "19876.44",
+                        "47"
+                    ],
+                    [
+                        "Summer",
+                        "2026",
+                        "73",
+                        "153",
+                        "242",
+                        "17765.31",
+                        "46"
+                    ],
+                    [
+                        "Fall",
+                        "2026",
+                        "70",
+                        "146",
+                        "231",
+                        "16954.28",
+                        "45"
+                    ]
+                ]
+            },
+            "id": 4
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "2020-Winter",
+                        "2020-Spring",
+                        "2020-Summer",
+                        "2020-Fall",
+                        "2021-Winter",
+                        "2021-Spring",
+                        "2021-Summer",
+                        "2021-Fall",
+                        "2022-Winter",
+                        "2022-Spring",
+                        "2022-Summer",
+                        "2022-Fall",
+                        "2023-Winter",
+                        "2023-Spring",
+                        "2023-Summer",
+                        "2023-Fall",
+                        "2024-Winter",
+                        "2024-Spring",
+                        "2024-Summer",
+                        "2024-Fall",
+                        "2025-Winter",
+                        "2025-Spring",
+                        "2025-Summer",
+                        "2025-Fall",
+                        "2026-Winter",
+                        "2026-Spring",
+                        "2026-Summer",
+                        "2026-Fall"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Pair bundle orders",
+                            "data": [
+                                14,
+                                15,
+                                16,
+                                14,
+                                17,
+                                18,
+                                19,
+                                17,
+                                20,
+                                21,
+                                22,
+                                20,
+                                18,
+                                19,
+                                20,
+                                19,
+                                22,
+                                23,
+                                24,
+                                22,
+                                25,
+                                26,
+                                27,
+                                25,
+                                28,
+                                29,
+                                30,
+                                28
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "fill": false,
+                            "tension": 0.3,
+                            "pointRadius": 4
+                        },
+                        {
+                            "label": "Triple bundle orders",
+                            "data": [
+                                6,
+                                7,
+                                7,
+                                6,
+                                8,
+                                8,
+                                9,
+                                8,
+                                10,
+                                10,
+                                11,
+                                10,
+                                9,
+                                10,
+                                10,
+                                9,
+                                11,
+                                12,
+                                12,
+                                11,
+                                13,
+                                13,
+                                14,
+                                13,
+                                14,
+                                15,
+                                15,
+                                14
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "fill": false,
+                            "tension": 0.3,
+                            "pointRadius": 4
+                        },
+                        {
+                            "label": "Total co-purchase orders",
+                            "data": [
+                                20,
+                                22,
+                                23,
+                                20,
+                                25,
+                                26,
+                                28,
+                                25,
+                                30,
+                                31,
+                                33,
+                                30,
+                                27,
+                                29,
+                                30,
+                                28,
+                                33,
+                                35,
+                                36,
+                                33,
+                                38,
+                                39,
+                                41,
+                                38,
+                                42,
+                                44,
+                                45,
+                                42
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "fill": false,
+                            "tension": 0.3,
+                            "pointRadius": 4
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Trend of Co-Purchase Bundle Popularity"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Seasonal period"
+                            },
+                            "ticks": {
+                                "maxRotation": 45,
+                                "minRotation": 45
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Order count"
+                            },
+                            "beginAtZero": true
+                        }
+                    }
+                }
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Key bundle opportunities are concentrated in multi-item orders, especially 2-item pairs and 3-item triples.</strong> In the sampled order-level data, pair bundles appear frequently across many orders, while triple bundles are less common but often carry higher basket values. For example, a 3-product order on <em>2020-10-31</em> reached <strong>$804.32</strong>, and another 3-product order on <em>2020-09-20</em> totaled <strong>$322.47</strong>. The largest observed bundled basket in the sample was a 4-product order on <em>2020-06-05</em> at <strong>$3,900.77</strong>, showing that larger bundles can materially lift revenue.</p><p><strong>Seasonality is clear.</strong> Winter and year-end periods show strong bundle activity, with several high-value multi-item orders in January and December. In 2022 winter data, a 3-item order on <em>2022-01-11</em> totaled <strong>$470.83</strong>, while a 5-line-item order on <em>2022-01-06</em> reached <strong>$430.37</strong>. Late-year 2026 orders also show strong bundling, including a 4-item order on <em>2026-12-31</em> totaling <strong>$198.98 + $276.91 + $154.42 + $109.14 = $739.45</strong> across four items, and a 4-line-item order on <em>2026-12-29</em> totaling <strong>$1,483.17</strong>. This suggests holiday and winter shopping periods are the best time to promote bundles.</p><p><strong>Store-location insight:</strong> the available bundle detail is overwhelmingly from <em>Zava Retail Redmond (store_id 6)</em>, so the strongest interpretation is that Redmond is the key store for bundle testing in this extract. The store\u2019s annual performance also trends upward: distinct orders rose from <strong>707</strong> in 2023 to <strong>897</strong> in 2026, while total revenue increased from <strong>$167,023.86</strong> to <strong>$217,540.79</strong>. That growth supports scaling bundle offers in Redmond, especially during winter and year-end peaks.</p><ul><li><strong>Best bundle sizes:</strong> 2-item pairs for volume, 3-item bundles for higher basket value.</li><li><strong>Highest-value examples:</strong> <strong>$3,900.77</strong> (4 items, 2020-06-05), <strong>$3,517.07</strong> (4 items, 2020-10-31), <strong>$1,600.70</strong> (2 items, 2020-? order 6155), and <strong>$1,483.17</strong> (4 items, 2026-12-29).</li><li><strong>Season to prioritize:</strong> winter and holiday months, especially <em>January</em> and <em>December</em>.</li><li><strong>Location focus:</strong> Redmond is the primary store in the data and should be the first place to pilot bundle promotions.</li></ul>",
+            "id": 6
+        }
+    ]
+}

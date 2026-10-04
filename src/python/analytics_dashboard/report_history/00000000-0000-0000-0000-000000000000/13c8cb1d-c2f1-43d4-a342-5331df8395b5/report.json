@@ -1,0 +1,1200 @@
+{
+    "report_id": "13c8cb1d-c2f1-43d4-a342-5331df8395b5",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "what are top 10 most sold products overall and which products have lowest sales. compare across multiple metrics such as units sold and sales velocity",
+    "title": "Top and Low Sales Products",
+    "summary": "Analyze the top 10 best-selling products overall and identify the lowest-selling products. Compare them across multiple metrics, including units sold and sales velocity.",
+    "timestamp": "2026-10-01 05:13:53",
+    "executed_sql_queries": [
+        "WITH product_sales AS (\n    SELECT\n        oi.product_id,\n        SUM(oi.quantity) AS total_units_sold\n    FROM retail.order_items oi\n    GROUP BY oi.product_id\n), ranked AS (\n    SELECT\n        ps.product_id,\n        ps.total_units_sold,\n        ROW_NUMBER() OVER (ORDER BY ps.total_units_sold DESC, ps.product_id) AS desc_rank,\n        ROW_NUMBER() OVER (ORDER BY ps.total_units_sold ASC, ps.product_id) AS asc_rank\n    FROM product_sales ps\n)\nSELECT\n    CASE\n        WHEN r.desc_rank <= 10 THEN 'top_10_most_sold'\n        ELSE 'lowest_selling'\n    END AS segment,\n    r.product_id,\n    p.sku,\n    p.product_name,\n    p.category_id,\n    p.type_id,\n    r.total_units_sold,\n    r.desc_rank,\n    r.asc_rank\nFROM ranked r\nJOIN retail.products p\n    ON p.product_id = r.product_id\nWHERE r.desc_rank <= 10\n   OR r.asc_rank <= 10\nORDER BY segment, total_units_sold DESC, product_id;",
+        "WITH product_metrics AS (\n    SELECT\n        oi.product_id,\n        SUM(oi.quantity) AS total_units_sold,\n        COUNT(DISTINCT oi.order_id) AS number_of_orders_containing_product,\n        AVG(oi.quantity::numeric) AS average_units_per_order,\n        SUM(oi.total_amount) AS total_revenue,\n        AVG((oi.unit_price - COALESCE(oi.discount_amount, 0))::numeric) AS average_selling_price_after_discount,\n        COUNT(DISTINCT DATE_TRUNC('month', o.order_date)) AS active_selling_months,\n        SUM(oi.quantity)::numeric / NULLIF(COUNT(DISTINCT DATE_TRUNC('month', o.order_date)), 0) AS sales_velocity\n    FROM retail.order_items oi\n    JOIN retail.orders o\n      ON o.order_id = oi.order_id\n    GROUP BY oi.product_id\n), ranked AS (\n    SELECT\n        pm.*,\n        ROW_NUMBER() OVER (ORDER BY pm.total_units_sold DESC, pm.product_id) AS top_rank,\n        ROW_NUMBER() OVER (ORDER BY pm.total_units_sold ASC, pm.product_id) AS low_rank\n    FROM product_metrics pm\n), selected AS (\n    SELECT product_id, 'top_10_most_sold_products' AS selection_group\n    FROM ranked\n    WHERE top_rank <= 10\n    UNION\n    SELECT product_id, 'lowest_selling_products' AS selection_group\n    FROM ranked\n    WHERE low_rank <= 10\n)\nSELECT\n    s.selection_group,\n    p.product_id,\n    p.product_name,\n    p.sku,\n    p.category_id AS category,\n    p.type_id AS type,\n    r.total_units_sold,\n    r.sales_velocity,\n    r.number_of_orders_containing_product,\n    r.average_units_per_order,\n    r.total_revenue,\n    r.average_selling_price_after_discount\nFROM selected s\nJOIN ranked r\n  ON r.product_id = s.product_id\nJOIN retail.products p\n  ON p.product_id = s.product_id\nORDER BY s.selection_group, r.total_units_sold DESC, p.product_id;"
+    ],
+    "components": [
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Selection Group",
+                    "Rank",
+                    "Product Name",
+                    "SKU",
+                    "Category",
+                    "Type",
+                    "Total Units Sold",
+                    "Orders Containing Product",
+                    "Avg Units / Order",
+                    "Total Revenue",
+                    "Avg Selling Price After Discount"
+                ],
+                "rows": [
+                    [
+                        "Top 10 Most Sold",
+                        1,
+                        "Precision Screwdriver Kit",
+                        "HTSD030001",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        2352,
+                        1415,
+                        1.6176066024759286,
+                        75535.93,
+                        31.640942228335625
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        2,
+                        "Needle-Nose Pliers 6-inch",
+                        "HTPL000006",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        2350,
+                        1366,
+                        1.6761768901569187,
+                        51405.44,
+                        21.53364479315264
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        3,
+                        "Combination Wrench Set SAE",
+                        "HTWR000001",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        2347,
+                        1408,
+                        1.6264726264726266,
+                        154708.16,
+                        64.71248094248094
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        4,
+                        "Sledge Hammer 3lb",
+                        "HTHM050300",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        2346,
+                        1377,
+                        1.659123055162659,
+                        142610.18,
+                        59.7470297029703
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        5,
+                        "Finishing Hammer 13oz",
+                        "HTHM041300",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        2319,
+                        1380,
+                        1.6435152374202693,
+                        84494.15,
+                        35.82525868178597
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        6,
+                        "Metric Hex Key Set",
+                        "HTAK000018",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        2317,
+                        1425,
+                        1.5902539464653398,
+                        40501.38,
+                        17.306952642415922
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        7,
+                        "Speed Square 7-inch",
+                        "HTMT000014",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        2285,
+                        1374,
+                        1.6415229885057472,
+                        33246.81,
+                        14.300675287356322
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        8,
+                        "Metric Wrench Set",
+                        "HTWR000002",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        2281,
+                        1370,
+                        1.6142958244869072,
+                        163062.04,
+                        70.28604387827318
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        9,
+                        "Ball-End Hex Set",
+                        "HTAK000020",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        2281,
+                        1367,
+                        1.6292857142857142,
+                        56708.59,
+                        24.556614285714286
+                    ],
+                    [
+                        "Top 10 Most Sold",
+                        10,
+                        "Locking Pliers 10-inch",
+                        "HTPL000008",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        2267,
+                        1353,
+                        1.629762760603882,
+                        65866.94,
+                        28.584169662113588
+                    ],
+                    [
+                        "Lowest-Selling",
+                        1,
+                        "Concealed Cabinet Hinge",
+                        "HWHI000025",
+                        "HARDWARE",
+                        "HINGES",
+                        1376,
+                        841,
+                        1.6150234741784038,
+                        26242.57,
+                        18.75342723004695
+                    ],
+                    [
+                        "Lowest-Selling",
+                        2,
+                        "LED Flush Mount Ceiling",
+                        "ELLF000021",
+                        "ELECTRICAL",
+                        "LIGHT FIXTURES",
+                        1375,
+                        836,
+                        1.6157461809635723,
+                        79692.25,
+                        57.02794359576968
+                    ],
+                    [
+                        "Lowest-Selling",
+                        3,
+                        "Treated 2x8x12 Joist",
+                        "LBDL000005",
+                        "LUMBER & BUILDING MATERIALS",
+                        "TREATED POSTS",
+                        1374,
+                        841,
+                        1.616470588235294,
+                        44038.61,
+                        31.629529411764707
+                    ],
+                    [
+                        "Lowest-Selling",
+                        4,
+                        "Pipe Joint Compound",
+                        "PLPLM003",
+                        "PLUMBING",
+                        "PLUMBER'S PUTTY",
+                        1371,
+                        861,
+                        1.561503416856492,
+                        16011.07,
+                        11.52116173120729
+                    ],
+                    [
+                        "Lowest-Selling",
+                        5,
+                        "Toilet Repair Kit Complete",
+                        "PLTLT004",
+                        "PLUMBING",
+                        "TOILET PARTS",
+                        1370,
+                        867,
+                        1.5568181818181819,
+                        40093.94,
+                        28.843602272727274
+                    ],
+                    [
+                        "Lowest-Selling",
+                        6,
+                        "Metal Pegboard Gray",
+                        "SOPB000008",
+                        "STORAGE & ORGANIZATION",
+                        "PEGBOARD",
+                        1369,
+                        849,
+                        1.5937136204889406,
+                        63602.33,
+                        45.9295227008149
+                    ],
+                    [
+                        "Lowest-Selling",
+                        7,
+                        "Copper Fitting Kit",
+                        "PLPPF003",
+                        "PLUMBING",
+                        "PIPE FITTINGS",
+                        1364,
+                        850,
+                        1.5915985997666278,
+                        55982.48,
+                        40.45269544924154
+                    ],
+                    [
+                        "Lowest-Selling",
+                        8,
+                        "Slide Bolt Latch",
+                        "HWHL000039",
+                        "HARDWARE",
+                        "HASPS & LATCHES",
+                        1352,
+                        843,
+                        1.5812865497076023,
+                        19845.24,
+                        14.417976608187136
+                    ],
+                    [
+                        "Lowest-Selling",
+                        9,
+                        "Hook and Eye Latch",
+                        "HWHL000040",
+                        "HARDWARE",
+                        "HASPS & LATCHES",
+                        1351,
+                        845,
+                        1.585680751173709,
+                        11770.53,
+                        8.5637441314554
+                    ],
+                    [
+                        "Lowest-Selling",
+                        10,
+                        "Ceiling Track System",
+                        "SOOVR004",
+                        "STORAGE & ORGANIZATION",
+                        "OVERHEAD STORAGE",
+                        1347,
+                        831,
+                        1.6054827175208581,
+                        323823.56,
+                        238.11632896305125
+                    ]
+                ]
+            },
+            "id": 1.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Precision Screwdriver Kit",
+                        "Needle-Nose Pliers 6-inch",
+                        "Combination Wrench Set SAE",
+                        "Sledge Hammer 3lb",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "Speed Square 7-inch",
+                        "Metric Wrench Set",
+                        "Ball-End Hex Set",
+                        "Locking Pliers 10-inch",
+                        "Ceiling Track System",
+                        "Hook and Eye Latch",
+                        "Slide Bolt Latch",
+                        "Copper Fitting Kit",
+                        "Metal Pegboard Gray",
+                        "Toilet Repair Kit Complete",
+                        "Pipe Joint Compound",
+                        "Treated 2x8x12 Joist",
+                        "LED Flush Mount Ceiling",
+                        "Concealed Cabinet Hinge"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Top 10 Most Sold",
+                            "data": [
+                                2352,
+                                2350,
+                                2347,
+                                2346,
+                                2319,
+                                2317,
+                                2285,
+                                2281,
+                                2281,
+                                2267,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Lowest 10 Sold",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                1347,
+                                1351,
+                                1352,
+                                1364,
+                                1369,
+                                1370,
+                                1371,
+                                1374,
+                                1375,
+                                1376
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Top 10 and Lowest-Selling Products by Total Units Sold Across All Accessible Stores"
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "ticks": {
+                                "autoSkip": false,
+                                "maxRotation": 45,
+                                "minRotation": 45
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Total Units Sold"
+                            }
+                        }
+                    }
+                },
+                "id": 2.0
+            },
+            "id": 2.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Precision Screwdriver Kit",
+                        "Needle-Nose Pliers 6-inch",
+                        "Combination Wrench Set SAE",
+                        "Sledge Hammer 3lb",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "Speed Square 7-inch",
+                        "Metric Wrench Set",
+                        "Ball-End Hex Set",
+                        "Locking Pliers 10-inch"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Sales velocity (units per active month)",
+                            "data": [
+                                28,
+                                27.976190476190474,
+                                27.94047619047619,
+                                27.928571428571427,
+                                27.607142857142858,
+                                27.583333333333332,
+                                27.202380952380953,
+                                27.154761904761905,
+                                27.154761904761905,
+                                26.988095238095237
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Top 10 Products by Sales Velocity (Units per Active Selling Month)"
+                        },
+                        "legend": {
+                            "display": false
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Units per active month"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Product"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Product",
+                    "SKU",
+                    "Category",
+                    "Type",
+                    "Total Units Sold",
+                    "Orders Containing Product",
+                    "Avg Units / Order",
+                    "Total Revenue",
+                    "Avg Selling Price After Discount"
+                ],
+                "rows": [
+                    [
+                        "Precision Screwdriver Kit",
+                        "HTSD030001",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        "2352",
+                        "1415",
+                        "1.6176066024759285",
+                        "75535.93",
+                        "32.08458482347547"
+                    ],
+                    [
+                        "Needle-Nose Pliers 6-inch",
+                        "HTPL000006",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        "2350",
+                        "1366",
+                        "1.6761768901569187",
+                        "51405.44",
+                        "21.8881044935806"
+                    ],
+                    [
+                        "Combination Wrench Set SAE",
+                        "HTWR000001",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        "2347",
+                        "1408",
+                        "1.6264726264726265",
+                        "154708.16",
+                        "65.67709494109494"
+                    ],
+                    [
+                        "Sledge Hammer 3lb",
+                        "HTHM050300",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        "2346",
+                        "1377",
+                        "1.6591230551626591",
+                        "142610.18",
+                        "60.68747972654408"
+                    ],
+                    [
+                        "Finishing Hammer 13oz",
+                        "HTHM041300",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        "2319",
+                        "1380",
+                        "1.6435152374202693",
+                        "84494.15",
+                        "36.38790656744626"
+                    ],
+                    [
+                        "Metric Hex Key Set",
+                        "HTAK000018",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        "2317",
+                        "1425",
+                        "1.5902539464653397",
+                        "40501.38",
+                        "17.527398192633265"
+                    ],
+                    [
+                        "Speed Square 7-inch",
+                        "HTMT000014",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        "2285",
+                        "1374",
+                        "1.6415229885057471",
+                        "33246.81",
+                        "14.515303759578544"
+                    ],
+                    [
+                        "Metric Wrench Set",
+                        "HTWR000002",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        "2281",
+                        "1370",
+                        "1.6142958244869073",
+                        "163062.04",
+                        "71.44376680820948"
+                    ],
+                    [
+                        "Ball-End Hex Set",
+                        "HTAK000020",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        "2281",
+                        "1367",
+                        "1.6292857142857143",
+                        "56708.59",
+                        "24.862205"
+                    ],
+                    [
+                        "Locking Pliers 10-inch",
+                        "HTPL000008",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        "2267",
+                        "1353",
+                        "1.6297627606038821",
+                        "65866.94",
+                        "28.96266846393482"
+                    ],
+                    [
+                        "Ratcheting Screwdriver",
+                        "HTSD050001",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        "2261",
+                        "1383",
+                        "1.6012747875354108",
+                        "86247.64",
+                        "38.197087110481586"
+                    ],
+                    [
+                        "Level 24-inch",
+                        "HTMT000015",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        "2259",
+                        "1373",
+                        "1.608974358974359",
+                        "88720.04",
+                        "39.30051471984805"
+                    ],
+                    [
+                        "Tape Measure 25-foot",
+                        "HTMT000013",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        "2253",
+                        "1374",
+                        "1.6104360257326662",
+                        "45937.46",
+                        "20.382412080057184"
+                    ],
+                    [
+                        "Digital Caliper 6-inch",
+                        "HTMT000017",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        "2245",
+                        "1372",
+                        "1.6081661891117479",
+                        "137455.58",
+                        "61.31331339541547"
+                    ],
+                    [
+                        "SAE Hex Key Set",
+                        "HTAK000019",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        "2240",
+                        "1363",
+                        "1.5988579586009993",
+                        "39283.51",
+                        "17.495958125148703"
+                    ],
+                    [
+                        "Insulated Screwdriver Set",
+                        "HTSD041000",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        "2229",
+                        "1331",
+                        "1.6377663482733284",
+                        "104967.18",
+                        "46.96737717364683"
+                    ],
+                    [
+                        "Flathead Screwdriver Set",
+                        "HTSD020001",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        "2225",
+                        "1340",
+                        "1.632428466617755",
+                        "45389.16",
+                        "20.416357666911225"
+                    ],
+                    [
+                        "Wood Rasp Set",
+                        "HTFR000011",
+                        "HAND TOOLS",
+                        "FILES & RASPS",
+                        "2215",
+                        "1357",
+                        "1.5946724262059035",
+                        "44995.56",
+                        "20.333774658027358"
+                    ],
+                    [
+                        "Riffler File Set",
+                        "HTFR000012",
+                        "HAND TOOLS",
+                        "FILES & RASPS",
+                        "2210",
+                        "1315",
+                        "1.6406829992576095",
+                        "87629.51",
+                        "39.57472506805246"
+                    ],
+                    [
+                        "Professional Claw Hammer 16oz",
+                        "HTHM001600",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        "2198",
+                        "1316",
+                        "1.622140221402214",
+                        "89625.81",
+                        "40.796954243542435"
+                    ],
+                    [
+                        "Ball Peen Hammer 12oz",
+                        "HTHM031200",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        "2196",
+                        "1333",
+                        "1.6123348017621145",
+                        "57917.21",
+                        "26.260959862946647"
+                    ],
+                    [
+                        "Wire Stripping Pliers",
+                        "HTPL000009",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        "2187",
+                        "1321",
+                        "1.6236080178173719",
+                        "91923.96",
+                        "42.018135857461024"
+                    ],
+                    [
+                        "T-Handle Hex Set",
+                        "HTAK000021",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        "2182",
+                        "1331",
+                        "1.5927007299270073",
+                        "86488.78",
+                        "39.538336618004866"
+                    ],
+                    [
+                        "Lineman's Pliers 9-inch",
+                        "HTPL000007",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        "2169",
+                        "1298",
+                        "1.6332831325301205",
+                        "78595.50",
+                        "36.244282254016064"
+                    ],
+                    [
+                        "Pipe Wrench Set",
+                        "HTWR000004",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        "2162",
+                        "1315",
+                        "1.6074349442379182",
+                        "188695.92",
+                        "87.50582899628253"
+                    ],
+                    [
+                        "Torque Wrench 1/2-drive",
+                        "HTWR000005",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        "2152",
+                        "1309",
+                        "1.6107784431137725",
+                        "337367.73",
+                        "157.18605439121756"
+                    ],
+                    [
+                        "Folding Rule 6-foot",
+                        "HTMT000016",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        "2152",
+                        "1317",
+                        "1.5881918819188192",
+                        "53454.72",
+                        "24.777968511685117"
+                    ],
+                    [
+                        "Adjustable Wrench 10-inch",
+                        "HTWR000003",
+                        "HAND TOOLS",
+                        "WRENCHES",
+                        "2140",
+                        "1297",
+                        "1.6150943396226415",
+                        "66023.89",
+                        "30.73368503144654"
+                    ],
+                    [
+                        "Phillips Screwdriver Set",
+                        "HTSD010001",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        "2120",
+                        "1308",
+                        "1.5856394913986537",
+                        "49351.70",
+                        "23.211361007230117"
+                    ],
+                    [
+                        "Coping Saw",
+                        "HTHS000010",
+                        "HAND TOOLS",
+                        "HAND SAWS",
+                        "2104",
+                        "1296",
+                        "1.5855312735493595",
+                        "39849.92",
+                        "18.992094323034413"
+                    ],
+                    [
+                        "Long Arm Hex Set",
+                        "HTAK000022",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        "2101",
+                        "1315",
+                        "1.5632440476190476",
+                        "46173.91",
+                        "22.036082589285714"
+                    ]
+                ]
+            },
+            "id": 4.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "scatter",
+                "data": {
+                    "datasets": [
+                        {
+                            "label": "Selected Products",
+                            "data": [
+                                {
+                                    "x": 2352,
+                                    "y": 28,
+                                    "r": 10,
+                                    "productName": "Precision Screwdriver Kit",
+                                    "sku": "HTSD030001"
+                                },
+                                {
+                                    "x": 2350,
+                                    "y": 27.98,
+                                    "r": 10,
+                                    "productName": "Needle-Nose Pliers 6-inch",
+                                    "sku": "HTPL000006"
+                                },
+                                {
+                                    "x": 2347,
+                                    "y": 27.94,
+                                    "r": 10,
+                                    "productName": "Combination Wrench Set SAE",
+                                    "sku": "HTWR000001"
+                                },
+                                {
+                                    "x": 2346,
+                                    "y": 27.93,
+                                    "r": 10,
+                                    "productName": "Sledge Hammer 3lb",
+                                    "sku": "HTHM050300"
+                                },
+                                {
+                                    "x": 2319,
+                                    "y": 27.61,
+                                    "r": 10,
+                                    "productName": "Finishing Hammer 13oz",
+                                    "sku": "HTHM041300"
+                                },
+                                {
+                                    "x": 2317,
+                                    "y": 27.58,
+                                    "r": 10,
+                                    "productName": "Metric Hex Key Set",
+                                    "sku": "HTAK000018"
+                                },
+                                {
+                                    "x": 2285,
+                                    "y": 27.2,
+                                    "r": 10,
+                                    "productName": "Speed Square 7-inch",
+                                    "sku": "HTMT000014"
+                                },
+                                {
+                                    "x": 2281,
+                                    "y": 27.15,
+                                    "r": 10,
+                                    "productName": "Metric Wrench Set",
+                                    "sku": "HTWR000002"
+                                },
+                                {
+                                    "x": 2281,
+                                    "y": 27.15,
+                                    "r": 10,
+                                    "productName": "Ball-End Hex Set",
+                                    "sku": "HTAK000020"
+                                },
+                                {
+                                    "x": 2267,
+                                    "y": 26.99,
+                                    "r": 10,
+                                    "productName": "Locking Pliers 10-inch",
+                                    "sku": "HTPL000008"
+                                },
+                                {
+                                    "x": 2261,
+                                    "y": 26.92,
+                                    "r": 10,
+                                    "productName": "Ratcheting Screwdriver",
+                                    "sku": "HTSD050001"
+                                },
+                                {
+                                    "x": 2259,
+                                    "y": 26.89,
+                                    "r": 10,
+                                    "productName": "Level 24-inch",
+                                    "sku": "HTMT000015"
+                                },
+                                {
+                                    "x": 2253,
+                                    "y": 26.82,
+                                    "r": 10,
+                                    "productName": "Tape Measure 25-foot",
+                                    "sku": "HTMT000013"
+                                },
+                                {
+                                    "x": 2245,
+                                    "y": 26.73,
+                                    "r": 10,
+                                    "productName": "Digital Caliper 6-inch",
+                                    "sku": "HTMT000017"
+                                },
+                                {
+                                    "x": 2240,
+                                    "y": 26.67,
+                                    "r": 10,
+                                    "productName": "SAE Hex Key Set",
+                                    "sku": "HTAK000019"
+                                },
+                                {
+                                    "x": 2229,
+                                    "y": 26.54,
+                                    "r": 10,
+                                    "productName": "Insulated Screwdriver Set",
+                                    "sku": "HTSD041000"
+                                },
+                                {
+                                    "x": 2225,
+                                    "y": 26.49,
+                                    "r": 10,
+                                    "productName": "Flathead Screwdriver Set",
+                                    "sku": "HTSD020001"
+                                },
+                                {
+                                    "x": 2215,
+                                    "y": 26.37,
+                                    "r": 10,
+                                    "productName": "Wood Rasp Set",
+                                    "sku": "HTFR000011"
+                                },
+                                {
+                                    "x": 2210,
+                                    "y": 26.31,
+                                    "r": 10,
+                                    "productName": "Riffler File Set",
+                                    "sku": "HTFR000012"
+                                },
+                                {
+                                    "x": 2198,
+                                    "y": 26.17,
+                                    "r": 10,
+                                    "productName": "Professional Claw Hammer 16oz",
+                                    "sku": "HTHM001600"
+                                },
+                                {
+                                    "x": 2196,
+                                    "y": 26.14,
+                                    "r": 10,
+                                    "productName": "Ball Peen Hammer 12oz",
+                                    "sku": "HTHM031200"
+                                },
+                                {
+                                    "x": 2187,
+                                    "y": 26.04,
+                                    "r": 10,
+                                    "productName": "Wire Stripping Pliers",
+                                    "sku": "HTPL000009"
+                                },
+                                {
+                                    "x": 2182,
+                                    "y": 25.98,
+                                    "r": 10,
+                                    "productName": "T-Handle Hex Set",
+                                    "sku": "HTAK000021"
+                                },
+                                {
+                                    "x": 2169,
+                                    "y": 25.82,
+                                    "r": 10,
+                                    "productName": "Lineman's Pliers 9-inch",
+                                    "sku": "HTPL000007"
+                                },
+                                {
+                                    "x": 2162,
+                                    "y": 25.74,
+                                    "r": 10,
+                                    "productName": "Pipe Wrench Set",
+                                    "sku": "HTWR000004"
+                                },
+                                {
+                                    "x": 2152,
+                                    "y": 25.62,
+                                    "r": 10,
+                                    "productName": "Torque Wrench 1/2-drive",
+                                    "sku": "HTWR000005"
+                                },
+                                {
+                                    "x": 2152,
+                                    "y": 25.62,
+                                    "r": 10,
+                                    "productName": "Folding Rule 6-foot",
+                                    "sku": "HTMT000016"
+                                },
+                                {
+                                    "x": 2140,
+                                    "y": 25.48,
+                                    "r": 10,
+                                    "productName": "Adjustable Wrench 10-inch",
+                                    "sku": "HTWR000003"
+                                },
+                                {
+                                    "x": 2120,
+                                    "y": 25.24,
+                                    "r": 10,
+                                    "productName": "Phillips Screwdriver Set",
+                                    "sku": "HTSD010001"
+                                },
+                                {
+                                    "x": 2104,
+                                    "y": 25.05,
+                                    "r": 10,
+                                    "productName": "Coping Saw",
+                                    "sku": "HTHS000010"
+                                },
+                                {
+                                    "x": 2101,
+                                    "y": 25.01,
+                                    "r": 10,
+                                    "productName": "Long Arm Hex Set",
+                                    "sku": "HTAK000022"
+                                }
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)"
+                            ],
+                            "pointRadius": 7,
+                            "pointHoverRadius": 9
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Units Sold vs Sales Velocity for Selected Products"
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": "function(context){const p=context.raw; return p.productName + ' (' + p.sku + '): Units Sold ' + p.x + ', Sales Velocity ' + p.y + ' units/month';}"
+                            }
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Total Units Sold"
+                            },
+                            "beginAtZero": true
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Sales Velocity (Units per Active Month)"
+                            },
+                            "beginAtZero": true
+                        }
+                    }
+                }
+            },
+            "id": 5.0
+        }
+    ]
+}

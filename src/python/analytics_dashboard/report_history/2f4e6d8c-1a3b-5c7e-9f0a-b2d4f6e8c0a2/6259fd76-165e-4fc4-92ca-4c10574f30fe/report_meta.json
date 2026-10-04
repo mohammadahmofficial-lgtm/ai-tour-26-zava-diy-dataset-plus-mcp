@@ -1,0 +1,13 @@
+{
+    "report_id": "6259fd76-165e-4fc4-92ca-4c10574f30fe",
+    "user_id": "2f4e6d8c-1a3b-5c7e-9f0a-b2d4f6e8c0a2",
+    "prompt": "Identify products where inventory levels are disproportionately high relative to sales velocity. This helps surface slow-moving items with the widest stock-to-demand gap.",
+    "title": "High Inventory, Low Velocity Products",
+    "summary": "Identify products with inventory levels that are disproportionately high compared with their sales velocity. This highlights slow-moving items with the largest stock-to-demand gaps.",
+    "timestamp": "2026-09-29 03:13:57",
+    "executed_sql_queries": [
+        "SELECT s.store_name, c.category_name, pt.type_name, COUNT(*) AS product_count, SUM(i.stock_level) AS total_stock_level\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nJOIN retail.categories c ON p.category_id = c.category_id\nJOIN retail.product_types pt ON p.type_id = pt.type_id\nGROUP BY s.store_name, c.category_name, pt.type_name\nORDER BY s.store_name, c.category_name, pt.type_name\nLIMIT 200;",
+        "SELECT s.store_name, c.category_name, pt.type_name, COUNT(*) AS product_count, MIN(p.product_id) AS min_product_id, MAX(p.product_id) AS max_product_id\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nJOIN retail.categories c ON p.category_id = c.category_id\nJOIN retail.product_types pt ON p.type_id = pt.type_id\nGROUP BY s.store_name, c.category_name, pt.type_name\nORDER BY s.store_name, c.category_name, pt.type_name\nLIMIT 100",
+        "WITH max_dt AS (SELECT MAX(order_date) AS max_order_date FROM retail.orders) SELECT max_order_date, (max_order_date - INTERVAL '29 days')::date AS window_start, max_order_date AS window_end FROM max_dt;"
+    ]
+}
