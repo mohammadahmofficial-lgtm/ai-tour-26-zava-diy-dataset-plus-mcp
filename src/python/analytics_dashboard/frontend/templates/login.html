@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zava Demo - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .login-container {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container login-container mt-5">
+        <div class="row w-100 justify-content-center">
+            
+            <div class="col-md-6 col-lg-5">
+                <div class="mb-5 text-center">
+                    <h1 class="display-5 fw-bold text-primary mb-2">Zava Analytics</h1>
+                    <p class="lead text-muted">Agentic Insights Dashboard</p>
+                </div>
+                
+                <div class="card shadow-sm border-0 p-4">
+                    <form id="loginForm" action="/do_login" method="POST">
+                        <input type="hidden" name="store_name" id="storeNameInput">
+                        
+                        <div class="mb-4">
+                            <label for="storeSelect" class="form-label fw-bold">Select Store Branch</label>
+                            <select class="form-select form-select-lg shadow-sm" id="storeSelect" onchange="updateSelection()">
+                                <option value="" selected disabled>Choose a store branch...</option>
+                                {% for s in stores %}
+                                <option value="{{ s.name }}">{{ s.name }} ({{ s.role }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm" id="loginBtn" disabled>
+                            Log In to Dashboard
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        function updateSelection() {
+            const select = document.getElementById('storeSelect');
+            const name = select.value;
+            const btn = document.getElementById('loginBtn');
+            const nameInput = document.getElementById('storeNameInput');
+            
+            if (name) {
+                btn.disabled = false;
+                nameInput.value = name;
+            } else {
+                btn.disabled = true;
+                nameInput.value = "";
+            }
+        }
+    </script>
+</body>
+</html>

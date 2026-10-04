@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zava Demo - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        .generating-placeholder {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/dashboard">Zava Analytics</a>
+            <div class="d-flex text-white align-items-center">
+                <span class="me-3">Logged in as: <strong>{{ user_name }}</strong></span>
+                <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3">
+                <!-- New Report Button -->
+                <button class="btn btn-primary w-100 mb-3 fw-bold shadow-sm" id="newReportBtn" data-bs-toggle="modal" data-bs-target="#newReportModal">
+                    <span id="newReportBtnText">+ New Report</span>
+                    <span id="newReportSpinner" class="d-none">
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Generating Report...
+                    </span>
+                </button>
+
+                <!-- Report History -->
+                <div class="card shadow-sm border-0">
+                    <div class="card-header bg-white fw-bold">Report History</div>
+                    <ul class="list-group list-group-flush" id="reportList">
+                        <!-- Generating placeholder (hidden by default) -->
+                        <li class="list-group-item generating-placeholder d-none" id="generatingPlaceholder">
+                            <div class="d-flex align-items-center">
+                                <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
+                                <div>
+                                    <div class="small fw-bold text-primary">Generating new report...</div>
+                                    <div class="text-muted" style="font-size: 0.75rem;">Agents are working on it</div>
+                                </div>
+                            </div>
+                        </li>
+                        {% for r in reports %}
+                        <a href="/dashboard?report_id={{ r.id }}" class="list-group-item list-group-item-action {% if current_report and r.id == current_report.report_id %}active{% endif %}">
+                            <div class="small fw-bold text-truncate" title="{{ r.title }}">{{ r.title }}</div>
+                            <div class="text-muted" style="font-size: 0.75rem;">{{ r.timestamp }}</div>
+                        </a>
+                        {% else %}
+                        <li class="list-group-item text-muted small" id="noReportsPlaceholder">No past reports</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Main Dashboard Area -->
+            <div class="col-md-9">
+                {% if current_report %}
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body bg-light rounded text-center py-4">
+                        <h4 class="mb-2 fw-bold text-primary">{{ current_report.title or 'Analytics Report' }}</h4>
+                        <p class="text-muted mb-0 mx-auto" style="max-width: 600px;">{{ current_report.summary or current_report.prompt }}</p>
+                    </div>
+                </div>
+                
+                <div class="card shadow-sm border-0">
+                    <div class="card-body">
+                        <div class="mt-2">
+                            {% for component in current_report.components %}
+                                {% if component.type == 'text' %}
+                                    <div class="mb-4">
+                                        {{ component.content | safe }}
+                                    </div>
+                                {% elif component.type == 'chart' %}
+                                    <div class="mb-4 bg-white p-3 border rounded shadow-sm">
+                                        <div style="position: relative; min-height: 420px; width: 100%;">
+                                            <canvas id="chart_{{ loop.index }}"></canvas>
+                                        </div>
+                                    </div>
+                                    <script>
+                                        document.addEventListener('DOMContentLoaded', function() {
+                                            const ctx = document.getElementById('chart_{{ loop.index }}').getContext('2d');
+                                            const chartConfig = {{ component.data | tojson | safe }};
+                                            // Ensure charts are always readable — override any smushed aspect ratio
+                                            if (!chartConfig.options) chartConfig.options = {};
+                                            chartConfig.options.maintainAspectRatio = false;
+                                            if (!chartConfig.options.plugins) chartConfig.options.plugins = {};
+                                            if (!chartConfig.options.plugins.legend) chartConfig.options.plugins.legend = {};
+                                            chartConfig.options.plugins.legend.position = chartConfig.options.plugins.legend.position || 'top';
+                                            new Chart(ctx, chartConfig);
+                                        });
+                                    </script>
+                                {% elif component.type == 'table' %}
+                                    <div class="table-responsive mb-4">
+                                        <table class="table table-striped table-hover border">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    {% for header in component.data.headers %}
+                                                    <th>{{ header }}</th>
+                                                    {% endfor %}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for row in component.data.rows %}
+                                                <tr>
+                                                    {% for cell in row %}
+                                                    <td>{{ cell }}</td>
+                                                    {% endfor %}
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center p-5 bg-light rounded border-0 shadow-sm text-muted">
+                    <h4 class="fw-bold">No Report Selected</h4>
+                    <p>Click "+ New Report" to ask the agent for analytics, or select a report from the history.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- New Report Modal -->
+    <div class="modal fade" id="newReportModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header bg-primary text-white">
+            <h5 class="modal-title fw-bold">Agentic Report Generation</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0 d-flex flex-column" style="height: 50vh;">
+              <div class="p-3 overflow-auto flex-grow-1" id="chatLog" style="background-color: #f8f9fa;">
+                  <div class="text-muted small mb-3 text-center">Describe the insights you need. The agent may ask clarifying questions.</div>
+              </div>
+              <div class="p-3 bg-white border-top">
+                  <textarea id="promptInput" class="form-control mb-2 shadow-sm" rows="2" placeholder="E.g., Show me the sales dip in 2023..."></textarea>
+                  <button id="generateBtn" class="btn btn-primary w-100 fw-bold shadow-sm" onclick="generateReport()">Send to Agent</button>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+        let chatHistory = [];
+
+        function appendMessage(role, text) {
+            const chatLog = document.getElementById('chatLog');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = role === 'User' ? 'mb-3 text-end' : 'mb-3 text-start';
+            
+            const badgeClass = role === 'User' ? 'bg-primary' : 'bg-success';
+            msgDiv.innerHTML = `<span class="badge ${badgeClass} mb-1 shadow-sm">${role}</span><div class="p-2 rounded bg-white border shadow-sm d-inline-block text-start" style="max-width: 85%; font-size: 0.95rem;">${text}</div>`;
+            
+            chatLog.appendChild(msgDiv);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            
+            chatHistory.push({role: role, content: text});
+        }
+
+        function showGeneratingState() {
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('newReportModal'));
+            if (modal) modal.hide();
+            
+            // Show spinner in the + New Report button
+            document.getElementById('newReportBtnText').classList.add('d-none');
+            document.getElementById('newReportSpinner').classList.remove('d-none');
+            document.getElementById('newReportBtn').disabled = true;
+            document.getElementById('newReportBtn').classList.replace('btn-primary', 'btn-warning');
+            
+            // Show the generating placeholder in Report History
+            document.getElementById('generatingPlaceholder').classList.remove('d-none');
+            const noReports = document.getElementById('noReportsPlaceholder');
+            if (noReports) noReports.classList.add('d-none');
+        }
+
+        function hideGeneratingState() {
+            document.getElementById('newReportBtnText').classList.remove('d-none');
+            document.getElementById('newReportSpinner').classList.add('d-none');
+            document.getElementById('newReportBtn').disabled = false;
+            document.getElementById('newReportBtn').classList.replace('btn-warning', 'btn-primary');
+            document.getElementById('generatingPlaceholder').classList.add('d-none');
+        }
+
+        function generateReport() {
+            const promptInput = document.getElementById('promptInput');
+            const promptText = promptInput.value.trim();
+            if (!promptText) return;
+
+            appendMessage('User', promptText);
+            promptInput.value = '';
+
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            
+            fetch('/generate_report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: chatHistory })
+            })
+            .then(res => res.json().then(data => ({status: res.status, body: data})))
+            .then(result => {
+                const data = result.body;
+                if (result.status === 400 && data.error) {
+                    // Agent requested clarification or security rejected
+                    appendMessage('Agent', data.error);
+                    btn.disabled = false;
+                } else if (data.task_id) {
+                    // Prompt accepted — close modal and start polling
+                    appendMessage('Agent', data.message);
+                    showGeneratingState();
+                    pollStatus(data.task_id);
+                } else {
+                    appendMessage('Agent', 'System Error: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                appendMessage('Agent', 'Network error connecting to the agent API.');
+                btn.disabled = false;
+            });
+        }
+
+        function pollStatus(taskId) {
+            fetch('/check_status/' + taskId)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'processing') {
+                    setTimeout(() => pollStatus(taskId), 15000);
+                } else if (data.status === 'success' && data.report_id) {
+                    window.location.href = '/dashboard?report_id=' + data.report_id;
+                } else if (data.error) {
+                    hideGeneratingState();
+                    alert('Pipeline Error: ' + data.error);
+                }
+            })
+            .catch(err => {
+                console.error('Polling error:', err);
+                setTimeout(() => pollStatus(taskId), 15000);
+            });
+        }
+    </script>
+</body>
+</html>
