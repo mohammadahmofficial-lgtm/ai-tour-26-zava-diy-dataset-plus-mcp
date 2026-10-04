@@ -1,0 +1,203 @@
+{
+    "report_id": "01285f84-c200-4621-b7cc-2e0dc0f15688",
+    "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "prompt": "Assess the most recent quarter\u2019s sales patterns to identify products with low stock (<100), check if based on last 6 month sales performance any of them might run out of stock in next 14 days",
+    "title": "Quarterly Sales and Stock Risk",
+    "summary": "Assess the most recent quarter\u2019s sales patterns to identify products with stock below 100 units. Use the last 6 months of sales performance to estimate whether any of these products may run out of stock within the next 14 days.",
+    "timestamp": "2026-09-29 05:18:40",
+    "executed_sql_queries": [
+        "SELECT p.product_id, p.sku, p.product_name, s.store_name, i.stock_level AS current_stock_level\nFROM retail.inventory i\nJOIN retail.products p ON i.product_id = p.product_id\nJOIN retail.stores s ON i.store_id = s.store_id\nWHERE i.stock_level < 100\nORDER BY s.store_name, p.product_name;",
+        "SELECT COUNT(*) AS inventory_rows, MIN(stock_level) AS min_stock_level, MAX(stock_level) AS max_stock_level\nFROM retail.inventory;",
+        "WITH low_stock AS (\n    SELECT i.store_id, i.product_id, i.stock_level\n    FROM retail.inventory i\n    WHERE i.stock_level < 100\n),\nrecent_sales AS (\n    SELECT\n        o.store_id,\n        oi.product_id,\n        DATE_TRUNC('month', o.order_date) AS sales_month,\n        SUM(oi.quantity) AS monthly_units,\n        SUM(oi.total_amount) AS monthly_revenue\n    FROM retail.orders o\n    JOIN retail.order_items oi\n      ON o.order_id = oi.order_id\n     AND o.store_id = oi.store_id\n    WHERE o.order_date >= (SELECT MAX(order_date) - INTERVAL '6 months' FROM retail.orders)\n    GROUP BY o.store_id, oi.product_id, DATE_TRUNC('month', o.order_date)\n),\nagg AS (\n    SELECT\n        ls.store_id,\n        ls.product_id,\n        ls.stock_level,\n        SUM(rs.monthly_units) AS six_month_units_sold,\n        SUM(rs.monthly_revenue) AS six_month_revenue,\n        SUM(rs.monthly_units) / 6.0 AS average_monthly_sales_units,\n        CASE\n            WHEN COUNT(*) < 2 THEN 'flat'\n            WHEN MAX(rs.monthly_units) > MIN(rs.monthly_units) * 1.2 THEN 'increasing'\n            WHEN MIN(rs.monthly_units) > MAX(rs.monthly_units) * 1.2 THEN 'decreasing'\n            ELSE 'flat'\n        END AS sales_trend_indicator\n    FROM low_stock ls\n    LEFT JOIN recent_sales rs\n      ON ls.store_id = rs.store_id\n     AND ls.product_id = rs.product_id\n    GROUP BY ls.store_id, ls.product_id, ls.stock_level\n)\nSELECT\n    s.store_name,\n    p.product_name,\n    p.sku,\n    p.category_id,\n    p.type_id,\n    a.stock_level,\n    a.six_month_units_sold,\n    a.six_month_revenue,\n    a.average_monthly_sales_units,\n    a.sales_trend_indicator\nFROM agg a\nJOIN retail.products p\n  ON a.product_id = p.product_id\nJOIN retail.stores s\n  ON a.store_id = s.store_id\nORDER BY s.store_name, p.product_name;",
+        "SELECT\n  COUNT(*) AS low_stock_rows,\n  MIN(stock_level) AS min_stock,\n  MAX(stock_level) AS max_stock\nFROM retail.inventory\nWHERE stock_level < 100;",
+        "WITH latest_order_date AS (\n  SELECT MAX(order_date) AS max_order_date\n  FROM retail.orders\n), period_bounds AS (\n  SELECT\n    date_trunc('quarter', max_order_date)::date AS latest_completed_quarter_start,\n    (date_trunc('quarter', max_order_date) - INTERVAL '6 months')::date AS six_month_start,\n    max_order_date::date AS report_date\n  FROM latest_order_date\n), low_stock AS (\n  SELECT i.store_id, i.product_id, i.stock_level\n  FROM retail.inventory i\n  WHERE i.stock_level < 100\n), sales_6m AS (\n  SELECT\n    oi.store_id,\n    oi.product_id,\n    SUM(oi.quantity) AS units_sold_6m,\n    SUM(oi.total_amount) AS revenue_6m,\n    COUNT(DISTINCT date_trunc('month', o.order_date)) AS active_months_6m\n  FROM retail.order_items oi\n  JOIN retail.orders o\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  CROSS JOIN period_bounds pb\n  WHERE o.order_date >= pb.six_month_start\n    AND o.order_date <= pb.report_date\n  GROUP BY oi.store_id, oi.product_id\n)\nSELECT\n  s.store_name,\n  p.product_name,\n  p.sku,\n  ls.stock_level,\n  COALESCE(s6.units_sold_6m, 0) AS units_sold_6m,\n  COALESCE(s6.revenue_6m, 0) AS revenue_6m,\n  ROUND(COALESCE(s6.units_sold_6m, 0)::numeric / 6.0, 2) AS avg_monthly_sales_units,\n  ROUND(COALESCE(s6.units_sold_6m, 0)::numeric / 180.0, 4) AS est_daily_sales_velocity,\n  CASE\n    WHEN COALESCE(s6.units_sold_6m, 0) = 0 THEN NULL\n    ELSE ROUND(ls.stock_level::numeric / (COALESCE(s6.units_sold_6m, 0)::numeric / 180.0), 2)\n  END AS days_of_stock_remaining,\n  CASE\n    WHEN COALESCE(s6.units_sold_6m, 0) = 0 THEN FALSE\n    WHEN ls.stock_level::numeric / (COALESCE(s6.units_sold_6m, 0)::numeric / 180.0) <= 14 THEN TRUE\n    ELSE FALSE\n  END AS stockout_risk_flag,\n  CASE\n    WHEN COALESCE(s6.units_sold_6m, 0) = 0 THEN 3\n    WHEN ls.stock_level::numeric / (COALESCE(s6.units_sold_6m, 0)::numeric / 180.0) <= 7 THEN 1\n    WHEN ls.stock_level::numeric / (COALESCE(s6.units_sold_6m, 0)::numeric / 180.0) <= 14 THEN 2\n    ELSE 3\n  END AS replenishment_priority\nFROM low_stock ls\nJOIN retail.products p\n  ON p.product_id = ls.product_id\nJOIN retail.stores s\n  ON s.store_id = ls.store_id\nLEFT JOIN sales_6m s6\n  ON s6.store_id = ls.store_id\n AND s6.product_id = ls.product_id\nORDER BY replenishment_priority ASC, days_of_stock_remaining ASC NULLS LAST, units_sold_6m DESC, s.store_name, p.product_name\nLIMIT 100;",
+        "SELECT COUNT(*) AS inventory_rows, SUM(CASE WHEN stock_level < 100 THEN 1 ELSE 0 END) AS low_stock_rows, MIN(stock_level) AS min_stock, MAX(stock_level) AS max_stock FROM retail.inventory;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive summary:</strong> The most recent quarter shows <em>healthy demand across accessible stores</em> with no immediate inventory risk. Across the inventory snapshot of <strong>424 rows</strong>, stock levels range from <strong>233</strong> to <strong>6,011</strong>, and there are <strong>0</strong> low-stock records below the <strong>100</strong> unit threshold. That means there are currently <strong>no accessible store/product combinations</strong> requiring urgent replenishment.</p><p><strong>Sales pattern:</strong> Quarter sales are concentrated in a mix of power tools and storage/workshop products. The top items by units sold were <strong>Metal Tool Cabinet</strong> with <strong>42 units</strong> and <strong>$12,286.77</strong> in revenue, <strong>Ceiling Track System</strong> with <strong>38 units</strong> and <strong>$8,980.52</strong>, and <strong>Mobile Work Cart</strong> with <strong>36 units</strong> and <strong>$10,365.44</strong>. Other strong sellers included <strong>Wooden Locker Bench</strong> (<strong>32</strong> units), <strong>Cordless Circular Saw 6-1/2</strong> (<strong>29</strong> units), and <strong>Metal Locker 2-Door</strong> (<strong>27</strong> units).</p><p><strong>Revenue concentration:</strong> The highest quarter revenue came from <strong>Sliding Miter Saw 12-inch</strong> at <strong>$15,524.20</strong> on just <strong>21 units</strong>, followed by <strong>Metal Tool Cabinet</strong> at <strong>$12,286.77</strong> and <strong>Cordless Miter Saw 10-inch</strong> at <strong>$10,415.31</strong>. This suggests a healthy mix of <em>high-volume storage items</em> and <em>higher-value tools</em>, supporting demand without visible stock pressure.</p><p><strong>Inventory risk view:</strong> Because no products are below the low-stock threshold, there is currently <strong>no stockout risk flag</strong> to assign and no replenishment priority queue to build. Overall, demand is active, but inventory coverage appears sufficient across accessible stores.</p><ul><li><strong>Inventory risk:</strong> Low, with <strong>0</strong> items under <strong>100</strong> units.</li><li><strong>Demand trend:</strong> Broad-based sales across tools, cabinets, lockers, and workbenches.</li><li><strong>Action focus:</strong> Monitor high-revenue SKUs like the <em>Sliding Miter Saw 12-inch</em> and high-unit movers like the <em>Metal Tool Cabinet</em> for continued demand strength.</li></ul>",
+            "id": 1.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "store_name",
+                    "product_name",
+                    "SKU",
+                    "category",
+                    "type",
+                    "stock_level"
+                ],
+                "rows": [
+                    [
+                        "No low-stock products found",
+                        "N/A",
+                        "N/A",
+                        "N/A",
+                        "N/A",
+                        "N/A"
+                    ]
+                ]
+            },
+            "id": 2.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Sliding Miter Saw 12-inch",
+                        "Metal Tool Cabinet",
+                        "Cordless Miter Saw 10-inch",
+                        "Mobile Work Cart",
+                        "Chemical Storage Cabinet",
+                        "Heavy Duty Workbench 6-foot",
+                        "Cordless Circular Saw 6-1/2",
+                        "Wooden Locker Bench",
+                        "Ceiling Track System",
+                        "Garage Workbench Kit",
+                        "Metal Locker 2-Door",
+                        "Gym Style Locker Bank",
+                        "Modular Cabinet System",
+                        "Adjustable Height Workbench",
+                        "Worm Drive Saw"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Quarter Sales Units",
+                            "data": [
+                                21,
+                                42,
+                                21,
+                                36,
+                                24,
+                                20,
+                                29,
+                                32,
+                                38,
+                                24,
+                                27,
+                                17,
+                                23,
+                                19,
+                                19
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Quarter Sales Revenue",
+                            "data": [
+                                15524.2,
+                                12286.77,
+                                10415.31,
+                                10365.44,
+                                10151.09,
+                                9551.28,
+                                9375.87,
+                                9303.36,
+                                8980.52,
+                                8712.47,
+                                8574.06,
+                                8355.29,
+                                8184.91,
+                                7627.11,
+                                7454.74
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Most Recent Quarter Sales Pattern by Product"
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "precision": 0
+                            }
+                        },
+                        "y": {
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store/Product",
+                    "SKU",
+                    "Stock Level",
+                    "6M Units Sold",
+                    "6M Revenue",
+                    "Avg Monthly Sales",
+                    "Trend"
+                ],
+                "rows": [
+                    [
+                        "No low-stock products found",
+                        "N/A",
+                        "N/A",
+                        "N/A",
+                        "N/A",
+                        "N/A",
+                        "N/A"
+                    ]
+                ]
+            },
+            "id": 4.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>14-day stockout risk assessment:</strong> <em>No low-stock items were found</em> in the inventory snapshot, so there are currently <strong>0 products</strong> eligible for stockout-risk scoring.</p><ul><li><strong>Inventory rows analyzed:</strong> 424</li><li><strong>Low-stock rows (&lt; 100 units):</strong> 0</li><li><strong>Minimum stock level:</strong> 233</li><li><strong>Maximum stock level:</strong> 6,011</li></ul><p>Because every accessible store/product combination is above the low-stock threshold, <strong>days_of_stock_remaining</strong>, <strong>stockout_risk_flag</strong>, and <strong>replenishment_priority</strong> could not be computed for any item.</p><p><strong>Sales context:</strong> the highest quarter sales volume among the provided products was <strong>42 units</strong> for <em>Metal Tool Cabinet</em> (SKU <strong>SOTLB003</strong>), followed by <em>Ceiling Track System</em> at <strong>38 units</strong> and <em>Mobile Work Cart</em> at <strong>36 units</strong>. However, with current stock levels starting at <strong>233 units</strong>, none of these products are in immediate 14-day stockout risk based on the available data.</p>",
+            "id": 5.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store",
+                    "Product",
+                    "SKU",
+                    "Estimated Days of Stock Remaining",
+                    "Risk Level",
+                    "Recommended Replenishment Focus"
+                ],
+                "rows": [
+                    [
+                        "No low-stock products found",
+                        "N/A",
+                        "N/A",
+                        "N/A",
+                        "None",
+                        "No replenishment action required based on current inventory snapshot"
+                    ]
+                ]
+            },
+            "id": 6.0
+        }
+    ]
+}

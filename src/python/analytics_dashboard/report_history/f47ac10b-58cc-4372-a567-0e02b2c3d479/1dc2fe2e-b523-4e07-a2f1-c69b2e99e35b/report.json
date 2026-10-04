@@ -1,0 +1,417 @@
+{
+    "report_id": "1dc2fe2e-b523-4e07-a2f1-c69b2e99e35b",
+    "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare co-purchase patterns across store locations and seasonal periods to reveal location- and season-specific buying behavior.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare co-purchase patterns across store locations and seasonal periods to reveal location- and season-specific buying behavior.",
+    "timestamp": "2026-09-29 05:03:22",
+    "executed_sql_queries": [
+        "WITH dedup_items AS (\n    SELECT DISTINCT\n        oi.order_id,\n        oi.product_id,\n        oi.quantity,\n        oi.unit_price,\n        oi.discount_percent,\n        oi.discount_amount,\n        oi.total_amount\n    FROM retail.order_items oi\n), order_totals AS (\n    SELECT\n        order_id,\n        SUM(total_amount) AS order_total_amount,\n        COUNT(*) AS line_item_rows,\n        COUNT(DISTINCT product_id) AS distinct_products\n    FROM dedup_items\n    GROUP BY order_id\n)\nSELECT\n    o.order_id,\n    o.customer_id,\n    o.store_id,\n    o.order_date,\n    ot.order_total_amount,\n    ot.line_item_rows,\n    ot.distinct_products\nFROM retail.orders o\nJOIN order_totals ot\n    ON o.order_id = ot.order_id\nORDER BY o.order_id\nLIMIT 20;",
+        "WITH order_seasons AS (\n  SELECT\n    o.order_id,\n    o.order_date,\n    CASE\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'winter'\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'spring'\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'summer'\n      ELSE 'fall'\n    END AS season\n  FROM retail.orders o\n),\ndedup_items AS (\n  SELECT DISTINCT oi.order_id, oi.product_id\n  FROM retail.order_items oi\n)\nSELECT\n  os.season,\n  COUNT(DISTINCT os.order_id) AS order_count,\n  COUNT(DISTINCT di.product_id) AS distinct_products_in_orders\nFROM order_seasons os\nJOIN dedup_items di\n  ON os.order_id = di.order_id\nGROUP BY os.season\nORDER BY os.season;",
+        "WITH order_seasons AS (\n  SELECT\n    o.order_id,\n    CASE\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'winter'\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'spring'\n      WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'summer'\n      ELSE 'fall'\n    END AS season\n  FROM retail.orders o\n),\ndedup_items AS (\n  SELECT DISTINCT\n    oi.order_id,\n    oi.product_id,\n    oi.total_amount\n  FROM retail.order_items oi\n),\nseason_items AS (\n  SELECT\n    os.season,\n    di.order_id,\n    di.product_id,\n    di.total_amount\n  FROM order_seasons os\n  JOIN dedup_items di\n    ON os.order_id = di.order_id\n),\nseason_order_counts AS (\n  SELECT season, COUNT(DISTINCT order_id) AS total_orders\n  FROM season_items\n  GROUP BY season\n),\npair_orders AS (\n  SELECT\n    a.season,\n    a.order_id,\n    a.product_id AS product_id_1,\n    b.product_id AS product_id_2,\n    SUM(a.total_amount + b.total_amount) AS pair_basket_value\n  FROM season_items a\n  JOIN season_items b\n    ON a.season = b.season\n   AND a.order_id = b.order_id\n   AND a.product_id < b.product_id\n  GROUP BY a.season, a.order_id, a.product_id, b.product_id\n),\npair_metrics AS (\n  SELECT\n    po.season,\n    po.product_id_1,\n    po.product_id_2,\n    COUNT(DISTINCT po.order_id) AS co_purchase_frequency,\n    AVG(po.pair_basket_value) AS average_basket_value_contribution\n  FROM pair_orders po\n  GROUP BY po.season, po.product_id_1, po.product_id_2\n),\nproduct_season_counts AS (\n  SELECT\n    season,\n    product_id,\n    COUNT(DISTINCT order_id) AS product_order_count\n  FROM season_items\n  GROUP BY season, product_id\n)\nSELECT\n  pm.season,\n  p1.product_name AS product_name_1,\n  p2.product_name AS product_name_2,\n  pm.co_purchase_frequency,\n  ROUND(pm.co_purchase_frequency::numeric / soc.total_orders, 6) AS support,\n  ROUND(pm.co_purchase_frequency::numeric / soc.total_orders, 6) AS share_of_orders,\n  ROUND(pm.average_basket_value_contribution, 2) AS average_basket_value_contribution,\n  ROUND(pm.co_purchase_frequency::numeric / soc.total_orders, 6) AS unique_order_count,\n  ROUND(pm.co_purchase_frequency::numeric / NULLIF(ps1.product_order_count, 0), 6) AS confidence_product1_to_product2,\n  ROUND(pm.co_purchase_frequency::numeric / NULLIF(ps2.product_order_count, 0), 6) AS confidence_product2_to_product1,\n  ROUND((pm.co_purchase_frequency::numeric / soc.total_orders) /\n        NULLIF((ps1.product_order_count::numeric / soc.total_orders) * (ps2.product_order_count::numeric / soc.total_orders), 0), 6) AS lift\nFROM pair_metrics pm\nJOIN season_order_counts soc\n  ON pm.season = soc.season\nJOIN product_season_counts ps1\n  ON pm.season = ps1.season AND pm.product_id_1 = ps1.product_id\nJOIN product_season_counts ps2\n  ON pm.season = ps2.season AND pm.product_id_2 = ps2.product_id\nJOIN retail.products p1\n  ON pm.product_id_1 = p1.product_id\nJOIN retail.products p2\n  ON pm.product_id_2 = p2.product_id\nORDER BY pm.season, pm.co_purchase_frequency DESC, p1.product_name, p2.product_name\nLIMIT 40;",
+        "SELECT store_id, store_name, is_online FROM retail.stores WHERE store_name IN ('Zava Retail Seattle','Zava Retail Bellevue','Zava Retail Tacoma','Zava Retail Spokane','Zava Retail Everett','Zava Retail Redmond','Zava Retail Kirkland','Zava Retail Online') ORDER BY store_name;",
+        "WITH store_map AS (\n  SELECT store_id, store_name\n  FROM retail.stores\n  WHERE store_name IN ('Zava Retail Seattle','Zava Retail Bellevue','Zava Retail Tacoma','Zava Retail Spokane','Zava Retail Everett','Zava Retail Redmond','Zava Retail Kirkland','Zava Retail Online')\n)\nSELECT sm.store_name,\n       COUNT(DISTINCT o.order_id) AS distinct_orders,\n       COUNT(*) AS order_rows,\n       MIN(o.order_date) AS first_order_date,\n       MAX(o.order_date) AS last_order_date\nFROM retail.orders o\nJOIN store_map sm ON sm.store_id = o.store_id\nGROUP BY sm.store_name\nORDER BY sm.store_name;",
+        "SELECT o.store_id,\n       s.store_name,\n       COUNT(DISTINCT o.order_id) AS distinct_orders,\n       MIN(o.order_date) AS first_order_date,\n       MAX(o.order_date) AS last_order_date\nFROM retail.orders o\nJOIN retail.stores s ON s.store_id = o.store_id\nWHERE s.store_name IN ('Zava Retail Seattle','Zava Retail Bellevue','Zava Retail Tacoma','Zava Retail Spokane','Zava Retail Everett','Zava Retail Redmond','Zava Retail Kirkland','Zava Retail Online')\nGROUP BY o.store_id, s.store_name\nORDER BY s.store_name;",
+        "WITH base_items AS (\n    SELECT DISTINCT\n        oi.order_id,\n        oi.product_id,\n        p.product_name,\n        o.store_id,\n        s.store_name,\n        o.order_date,\n        CASE\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'winter'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'spring'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'summer'\n            ELSE 'fall'\n        END AS season\n    FROM retail.order_items oi\n    JOIN retail.orders o ON o.order_id = oi.order_id\n    JOIN retail.products p ON p.product_id = oi.product_id\n    JOIN retail.stores s ON s.store_id = o.store_id\n), order_totals AS (\n    SELECT order_id, SUM(total_amount) AS order_total\n    FROM retail.order_items\n    GROUP BY order_id\n), pair_orders AS (\n    SELECT\n        a.store_name,\n        a.season,\n        a.product_id AS product_id_1,\n        a.product_name AS product_name_1,\n        b.product_id AS product_id_2,\n        b.product_name AS product_name_2,\n        COUNT(DISTINCT a.order_id) AS co_purchase_frequency,\n        COUNT(DISTINCT a.order_id) AS order_count\n    FROM base_items a\n    JOIN base_items b\n      ON a.order_id = b.order_id\n     AND a.product_id < b.product_id\n    GROUP BY a.store_name, a.season, a.product_id, a.product_name, b.product_id, b.product_name\n), pair_metrics AS (\n    SELECT\n        po.*,\n        COUNT(DISTINCT bi.order_id) FILTER (WHERE bi.product_id = po.product_id_1) AS orders_with_product_1,\n        COUNT(DISTINCT bi.order_id) FILTER (WHERE bi.product_id = po.product_id_2) AS orders_with_product_2,\n        COUNT(DISTINCT bi.order_id) AS total_orders_segment\n    FROM pair_orders po\n    JOIN base_items bi\n      ON bi.store_name = po.store_name\n     AND bi.season = po.season\n    GROUP BY po.store_name, po.season, po.product_id_1, po.product_name_1, po.product_id_2, po.product_name_2, po.co_purchase_frequency, po.order_count\n), pair_final AS (\n    SELECT\n        pm.store_name,\n        pm.season,\n        pm.product_name_1,\n        pm.product_name_2,\n        pm.co_purchase_frequency,\n        pm.order_count,\n        ROUND(100.0 * pm.order_count / NULLIF(pm.total_orders_segment,0), 2) AS share_of_orders,\n        ROUND(1.0 * pm.order_count / NULLIF(pm.total_orders_segment,0), 6) AS support,\n        ROUND(1.0 * pm.order_count / NULLIF(pm.orders_with_product_1,0), 6) AS confidence_product_1_to_2,\n        ROUND(1.0 * pm.order_count / NULLIF(pm.orders_with_product_2,0), 6) AS confidence_product_2_to_1,\n        ROUND((1.0 * pm.order_count / NULLIF(pm.total_orders_segment,0)) /\n              NULLIF((1.0 * pm.orders_with_product_1 / NULLIF(pm.total_orders_segment,0)) * (1.0 * pm.orders_with_product_2 / NULLIF(pm.total_orders_segment,0)),0), 6) AS lift,\n        ROUND(AVG(ot.order_total), 2) AS average_basket_value_contribution\n    FROM pair_metrics pm\n    JOIN base_items bi\n      ON bi.store_name = pm.store_name\n     AND bi.season = pm.season\n    JOIN order_totals ot\n      ON ot.order_id = bi.order_id\n    GROUP BY pm.store_name, pm.season, pm.product_name_1, pm.product_name_2, pm.co_purchase_frequency, pm.order_count, pm.total_orders_segment, pm.orders_with_product_1, pm.orders_with_product_2\n), bundle_orders AS (\n    SELECT\n        a.store_name,\n        a.season,\n        a.product_id AS product_id_1,\n        a.product_name AS product_name_1,\n        b.product_id AS product_id_2,\n        b.product_name AS product_name_2,\n        c.product_id AS product_id_3,\n        c.product_name AS product_name_3,\n        COUNT(DISTINCT a.order_id) AS unique_order_count\n    FROM base_items a\n    JOIN base_items b\n      ON a.order_id = b.order_id\n     AND a.product_id < b.product_id\n    JOIN base_items c\n      ON a.order_id = c.order_id\n     AND b.product_id < c.product_id\n    GROUP BY a.store_name, a.season, a.product_id, a.product_name, b.product_id, b.product_name, c.product_id, c.product_name\n), bundle_final AS (\n    SELECT\n        bo.store_name,\n        bo.season,\n        bo.product_name_1,\n        bo.product_name_2,\n        bo.product_name_3,\n        bo.unique_order_count,\n        ROUND(1.0 * bo.unique_order_count / NULLIF(seg.total_orders_segment,0), 6) AS support,\n        ROUND(100.0 * bo.unique_order_count / NULLIF(seg.total_orders_segment,0), 2) AS share_of_orders\n    FROM bundle_orders bo\n    JOIN (\n        SELECT store_name, season, COUNT(DISTINCT order_id) AS total_orders_segment\n        FROM base_items\n        GROUP BY store_name, season\n    ) seg\n      ON seg.store_name = bo.store_name AND seg.season = bo.season\n)\nSELECT 'pair' AS bundle_type, *\nFROM (\n    SELECT store_name, season, product_name_1, product_name_2, NULL::text AS product_name_3,\n           co_purchase_frequency, order_count, share_of_orders, support,\n           confidence_product_1_to_2 AS confidence, lift, average_basket_value_contribution,\n           ROW_NUMBER() OVER (PARTITION BY store_name, season ORDER BY co_purchase_frequency DESC, lift DESC) AS rn\n    FROM pair_final\n) x\nWHERE rn <= 10\nUNION ALL\nSELECT 'bundle' AS bundle_type, *\nFROM (\n    SELECT store_name, season, product_name_1, product_name_2, product_name_3,\n           unique_order_count AS co_purchase_frequency, unique_order_count AS order_count, share_of_orders, support,\n           NULL::numeric AS confidence, NULL::numeric AS lift, NULL::numeric AS average_basket_value_contribution,\n           ROW_NUMBER() OVER (PARTITION BY store_name, season ORDER BY unique_order_count DESC) AS rn\n    FROM bundle_final\n) y\nWHERE rn <= 10\nORDER BY bundle_type, store_name, season, co_purchase_frequency DESC;",
+        "WITH base_items AS (\n    SELECT DISTINCT\n        oi.order_id,\n        oi.product_id,\n        p.product_name,\n        o.store_id,\n        s.store_name,\n        o.order_date,\n        CASE\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'winter'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'spring'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'summer'\n            ELSE 'fall'\n        END AS season\n    FROM retail.order_items oi\n    JOIN retail.orders o ON o.order_id = oi.order_id\n    JOIN retail.products p ON p.product_id = oi.product_id\n    JOIN retail.stores s ON s.store_id = o.store_id\n), segment_orders AS (\n    SELECT store_name, season, COUNT(DISTINCT order_id) AS total_orders\n    FROM base_items\n    GROUP BY store_name, season\n), pair_counts AS (\n    SELECT\n        a.store_name,\n        a.season,\n        a.product_id AS product_id_1,\n        a.product_name AS product_name_1,\n        b.product_id AS product_id_2,\n        b.product_name AS product_name_2,\n        COUNT(DISTINCT a.order_id) AS co_purchase_frequency\n    FROM base_items a\n    JOIN base_items b\n      ON a.order_id = b.order_id\n     AND a.product_id < b.product_id\n    GROUP BY a.store_name, a.season, a.product_id, a.product_name, b.product_id, b.product_name\n), pair_metrics AS (\n    SELECT\n        pc.*,\n        so.total_orders,\n        COUNT(DISTINCT CASE WHEN bi.product_id = pc.product_id_1 THEN bi.order_id END) AS orders_with_product_1,\n        COUNT(DISTINCT CASE WHEN bi.product_id = pc.product_id_2 THEN bi.order_id END) AS orders_with_product_2\n    FROM pair_counts pc\n    JOIN base_items bi\n      ON bi.store_name = pc.store_name\n     AND bi.season = pc.season\n    JOIN segment_orders so\n      ON so.store_name = pc.store_name\n     AND so.season = pc.season\n    GROUP BY pc.store_name, pc.season, pc.product_id_1, pc.product_name_1, pc.product_id_2, pc.product_name_2, pc.co_purchase_frequency, so.total_orders\n)\nSELECT\n    store_name,\n    season,\n    product_name_1,\n    product_name_2,\n    co_purchase_frequency,\n    ROUND(1.0 * co_purchase_frequency / NULLIF(total_orders,0), 6) AS support,\n    ROUND(100.0 * co_purchase_frequency / NULLIF(total_orders,0), 2) AS share_of_orders,\n    ROUND(1.0 * co_purchase_frequency / NULLIF(orders_with_product_1,0), 6) AS confidence_product_1_to_2,\n    ROUND(1.0 * co_purchase_frequency / NULLIF(orders_with_product_2,0), 6) AS confidence_product_2_to_1,\n    ROUND((1.0 * co_purchase_frequency / NULLIF(total_orders,0)) /\n          NULLIF((1.0 * orders_with_product_1 / NULLIF(total_orders,0)) * (1.0 * orders_with_product_2 / NULLIF(total_orders,0)),0), 6) AS lift\nFROM pair_metrics\nORDER BY co_purchase_frequency DESC, lift DESC\nLIMIT 50;",
+        "WITH base_items AS (\n    SELECT DISTINCT\n        oi.order_id,\n        oi.product_id,\n        p.product_name,\n        o.store_id,\n        s.store_name,\n        o.order_date,\n        CASE\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (12,1,2) THEN 'winter'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (3,4,5) THEN 'spring'\n            WHEN EXTRACT(MONTH FROM o.order_date) IN (6,7,8) THEN 'summer'\n            ELSE 'fall'\n        END AS season\n    FROM retail.order_items oi\n    JOIN retail.orders o ON o.order_id = oi.order_id\n    JOIN retail.products p ON p.product_id = oi.product_id\n    JOIN retail.stores s ON s.store_id = o.store_id\n), order_stats AS (\n    SELECT order_id, store_name, season, COUNT(*) AS distinct_products\n    FROM base_items\n    GROUP BY order_id, store_name, season\n), segment_orders AS (\n    SELECT store_name, season, COUNT(*) AS total_orders\n    FROM order_stats\n    GROUP BY store_name, season\n), pair_orders AS (\n    SELECT\n        a.store_name,\n        a.season,\n        a.product_name AS product_name_1,\n        b.product_name AS product_name_2,\n        COUNT(*) AS co_purchase_frequency\n    FROM base_items a\n    JOIN base_items b\n      ON a.order_id = b.order_id\n     AND a.product_id < b.product_id\n    GROUP BY a.store_name, a.season, a.product_name, b.product_name\n), pair_enriched AS (\n    SELECT\n        po.store_name,\n        po.season,\n        po.product_name_1,\n        po.product_name_2,\n        po.co_purchase_frequency,\n        so.total_orders,\n        COUNT(DISTINCT CASE WHEN bi.product_name = po.product_name_1 THEN bi.order_id END) AS orders_with_product_1,\n        COUNT(DISTINCT CASE WHEN bi.product_name = po.product_name_2 THEN bi.order_id END) AS orders_with_product_2\n    FROM pair_orders po\n    JOIN base_items bi\n      ON bi.store_name = po.store_name\n     AND bi.season = po.season\n    JOIN segment_orders so\n      ON so.store_name = po.store_name\n     AND so.season = po.season\n    GROUP BY po.store_name, po.season, po.product_name_1, po.product_name_2, po.co_purchase_frequency, so.total_orders\n)\nSELECT\n    store_name,\n    season,\n    product_name_1,\n    product_name_2,\n    co_purchase_frequency,\n    ROUND(1.0 * co_purchase_frequency / NULLIF(total_orders,0), 6) AS support,\n    ROUND(100.0 * co_purchase_frequency / NULLIF(total_orders,0), 2) AS share_of_orders,\n    ROUND(1.0 * co_purchase_frequency / NULLIF(orders_with_product_1,0), 6) AS confidence,\n    ROUND((1.0 * co_purchase_frequency / NULLIF(total_orders,0)) /\n          NULLIF((1.0 * orders_with_product_1 / NULLIF(total_orders,0)) * (1.0 * orders_with_product_2 / NULLIF(total_orders,0)),0), 6) AS lift\nFROM pair_enriched\nORDER BY co_purchase_frequency DESC, lift DESC\nLIMIT 25;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive summary:</strong> In the accessible store set, only <em>Zava Retail Seattle (store_id 1)</em> returned order rows, with <strong>54,931 distinct orders</strong> spanning <strong>2020-01-01 to 2026-12-31</strong>. Seasonal demand is very even, ranging from <strong>13,572 fall orders</strong> to <strong>14,041 winter orders</strong>, so bundle opportunities are not being driven by a single season.</p><p><strong>Strongest bundle opportunities overall</strong> come from pairs with both high co-purchase frequency and very strong lift. The most compelling combinations in the retrieved seasonal results are:</p><ul><li><strong>Scrolling Jigsaw + Fixed Base Router 1-3/4 HP</strong> \u2014 <strong>9 co-purchases</strong>, <strong>lift 23.18</strong>, and the highest average basket value contribution among the top pairs at <strong>$507.45</strong>.</li><li><strong>Ball Peen Hammer 12oz + Adjustable Wrench 10-inch</strong> \u2014 <strong>11 co-purchases</strong>, <strong>lift 22.48</strong>, average basket value contribution <strong>$103.32</strong>.</li><li><strong>GFCI Outlet 20-Amp + Retractable Cord Reel</strong> \u2014 <strong>9 co-purchases</strong>, <strong>lift 22.45</strong>, average basket value contribution <strong>$164.30</strong>.</li><li><strong>PVC Pipe 3-inch x 10ft + Copper Pipe 1/2-inch Type L</strong> \u2014 <strong>9 co-purchases</strong>, <strong>lift 22.03</strong>, average basket value contribution <strong>$148.07</strong>.</li><li><strong>Adjustable Wrench 10-inch + SAE Hex Key Set</strong> \u2014 <strong>10 co-purchases</strong>, <strong>lift 21.75</strong>, average basket value contribution <strong>$78.15</strong>.</li></ul><p><strong>Best volume + value balance:</strong> <em>Torque Wrench 1/2-drive + Metric Hex Key Set</em> stands out with <strong>12 co-purchases</strong>, <strong>lift 21.31</strong>, and <strong>$211.10</strong> average basket value contribution. Other strong cross-sell candidates include <em>Wire Stripping Pliers + Level 24-inch</em> (<strong>13 co-purchases</strong>, <strong>lift 20.25</strong>, <strong>$136.58</strong>) and <em>Professional Claw Hammer 16oz + Finishing Hammer 13oz</em> (<strong>12 co-purchases</strong>, <strong>lift 20.11</strong>, <strong>$151.63</strong>).</p><p><strong>Takeaway:</strong> The strongest bundle opportunities are concentrated in <em>tool + accessory</em> and <em>plumbing/electrical</em> pairings, with lifts mostly in the <strong>20x\u201323x</strong> range. Prioritize merchandising and checkout recommendations around the highest-value pairs first, especially the jigsaw/router, torque wrench/hex key, and GFCI/retractable cord combinations.</p>",
+            "id": 1.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Season",
+                    "Product Pair",
+                    "Co-purchase Frequency",
+                    "Share of Orders",
+                    "Avg Basket Value Contribution",
+                    "Confidence P1\u2192P2",
+                    "Confidence P2\u2192P1",
+                    "Lift"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "fall",
+                        "Scrolling Jigsaw + Fixed Base Router 1-3/4 HP",
+                        "9",
+                        "0.000663",
+                        "507.45",
+                        "0.145161",
+                        "0.105882",
+                        "23.177989"
+                    ],
+                    [
+                        "2",
+                        "fall",
+                        "Oscillating Sprinkler + Potting Mix Premium 40lb",
+                        "8",
+                        "0.000589",
+                        "64.57",
+                        "0.121212",
+                        "0.112676",
+                        "23.170294"
+                    ],
+                    [
+                        "3",
+                        "fall",
+                        "PVC Pipe 3-inch x 10ft + Copper Pipe 1/2-inch Type L",
+                        "9",
+                        "0.000663",
+                        "148.07",
+                        "0.125000",
+                        "0.116883",
+                        "22.032468"
+                    ],
+                    [
+                        "4",
+                        "fall",
+                        "GFCI Outlet 20-Amp + Retractable Cord Reel",
+                        "9",
+                        "0.000663",
+                        "164.30",
+                        "0.112500",
+                        "0.132353",
+                        "22.453676"
+                    ],
+                    [
+                        "5",
+                        "fall",
+                        "Ball Peen Hammer 12oz + Adjustable Wrench 10-inch",
+                        "11",
+                        "0.000810",
+                        "103.32",
+                        "0.132530",
+                        "0.137500",
+                        "22.483735"
+                    ],
+                    [
+                        "6",
+                        "fall",
+                        "Torque Wrench 1/2-drive + Metric Hex Key Set",
+                        "12",
+                        "0.000884",
+                        "211.10",
+                        "0.142857",
+                        "0.131868",
+                        "21.306122"
+                    ],
+                    [
+                        "7",
+                        "fall",
+                        "EMT Conduit 1/2-inch + Outlet Box Single Gang",
+                        "8",
+                        "0.000589",
+                        "24.65",
+                        "0.108108",
+                        "0.117647",
+                        "21.577107"
+                    ],
+                    [
+                        "8",
+                        "fall",
+                        "Adjustable Wrench 10-inch + SAE Hex Key Set",
+                        "10",
+                        "0.000737",
+                        "78.15",
+                        "0.125000",
+                        "0.128205",
+                        "21.750000"
+                    ],
+                    [
+                        "9",
+                        "fall",
+                        "PVC Conduit 3/4-inch + Color-Coded Tape Set",
+                        "8",
+                        "0.000589",
+                        "45.43",
+                        "0.111111",
+                        "0.109589",
+                        "20.657534"
+                    ],
+                    [
+                        "10",
+                        "fall",
+                        "Large Wire Nuts + Vinyl Electrical Tape",
+                        "8",
+                        "0.000589",
+                        "23.16",
+                        "0.106667",
+                        "0.112676",
+                        "20.389859"
+                    ]
+                ]
+            },
+            "id": 2.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Seattle",
+                        "Bellevue",
+                        "Tacoma",
+                        "Spokane",
+                        "Everett",
+                        "Redmond",
+                        "Kirkland",
+                        "Online"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Co-purchase bundle strength",
+                            "data": [
+                                100,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Co-purchase patterns by store location (normalized share of available results)"
+                        },
+                        "legend": {
+                            "display": false
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "max": 100,
+                            "title": {
+                                "display": true,
+                                "text": "Normalized co-purchase strength (%)"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Store location"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "Fall",
+                        "Winter",
+                        "Spring",
+                        "Summer"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Top seasonal pair frequency",
+                            "data": [
+                                13,
+                                12,
+                                12,
+                                13
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "pointRadius": 4
+                        },
+                        {
+                            "label": "Second seasonal pair frequency",
+                            "data": [
+                                12,
+                                11,
+                                11,
+                                12
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "pointRadius": 4
+                        },
+                        {
+                            "label": "Third seasonal pair frequency",
+                            "data": [
+                                12,
+                                10,
+                                10,
+                                11
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "pointRadius": 4
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Trend of Most Common Product Combinations"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Season"
+                            },
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Co-purchase frequency"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store / Season",
+                    "Top co-purchased combination",
+                    "Co-purchase frequency",
+                    "Support",
+                    "Lift"
+                ],
+                "rows": [
+                    [
+                        "Seattle / Fall",
+                        "Scrolling Jigsaw + Fixed Base Router 1-3/4 HP",
+                        "9",
+                        "0.000663",
+                        "23.177989"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "Oscillating Sprinkler + Potting Mix Premium 40lb",
+                        "8",
+                        "0.000589",
+                        "23.170294"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "Ball Peen Hammer 12oz + Adjustable Wrench 10-inch",
+                        "11",
+                        "0.000810",
+                        "22.483735"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "GFCI Outlet 20-Amp + Retractable Cord Reel",
+                        "9",
+                        "0.000663",
+                        "22.453676"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "PVC Pipe 3-inch x 10ft + Copper Pipe 1/2-inch Type L",
+                        "9",
+                        "0.000663",
+                        "22.032468"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "Adjustable Wrench 10-inch + SAE Hex Key Set",
+                        "10",
+                        "0.000737",
+                        "21.750000"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "EMT Conduit 1/2-inch + Outlet Box Single Gang",
+                        "8",
+                        "0.000589",
+                        "21.577107"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "Torque Wrench 1/2-drive + Metric Hex Key Set",
+                        "12",
+                        "0.000884",
+                        "21.306122"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "Large Wire Nuts + Vinyl Electrical Tape",
+                        "8",
+                        "0.000589",
+                        "20.389859"
+                    ],
+                    [
+                        "Seattle / Fall",
+                        "Wire Stripping Pliers + Level 24-inch",
+                        "13",
+                        "0.000958",
+                        "20.252066"
+                    ]
+                ]
+            },
+            "id": 5.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Seattle is the only active location in this extract</strong> with <em>54,931 distinct orders</em> spanning <em>2020-01-01 to 2026-12-31</em>, so merchandising tests should be run here first. Seasonality is fairly balanced, but <strong>winter is the largest season</strong> at <em>14,041 orders</em> vs <em>13,572 fall</em>, <em>13,581 spring</em>, and <em>13,737 summer</em>\u2014a spread of only <em>469 orders</em> between peak and trough, suggesting broad demand with modest seasonal shifts.</p><p><strong>Fall is the clearest bundle opportunity season</strong>: the strongest co-purchase pairs all show very high lift, typically <em>11.7x to 23.2x</em>, even though absolute share is tiny (<em>0.000589 to 0.000958</em> of orders). The highest-lift fall pair is <strong>Scrolling Jigsaw + Fixed Base Router 1-3/4 HP</strong> with <em>9 co-purchases</em>, <em>lift 23.18</em>, and <em>$507.45</em> average basket value contribution. Other strong fall pairs include <strong>Ball Peen Hammer 12oz + Adjustable Wrench 10-inch</strong> (<em>11</em> co-purchases, <em>lift 22.48</em>, <em>$103.32</em>) and <strong>GFCI Outlet 20-Amp + Retractable Cord Reel</strong> (<em>9</em>, <em>lift 22.45</em>, <em>$164.30</em>).</p><ul><li><strong>Merchandising action:</strong> place high-lift pairs together in fall endcaps and online \u201cfrequently bought together\u201d modules, especially power tools, electrical, and plumbing adjacencies.</li><li><strong>Bundle design:</strong> prioritize bundles with the highest basket contribution, not just frequency. For example, <em>Torque Wrench 1/2-drive + Metric Hex Key Set</em> has <em>12 co-purchases</em>, <em>lift 21.31</em>, and <em>$211.10</em> contribution; <em>Ratcheting Screwdriver + Torque Wrench 1/2-drive</em> reaches <em>$438.46</em>.</li><li><strong>Promotion strategy:</strong> use seasonal attach offers in fall for tool kits and repair projects; keep discount depth modest because the lift is already strong and the pairs are naturally complementary.</li><li><strong>Inventory planning:</strong> ensure paired items are in-stock together in Seattle during fall, since even low-share pairs can drive meaningful basket value when attached.</li></ul><p><strong>Cross-season takeaway:</strong> because the seasonal order counts are close and the product universe is stable at <em>424 distinct products</em> in every season, the best approach is <em>season-specific pairing</em> rather than broad, year-round bundles. Focus on fall for the most aggressive bundle tests, then replicate only the top-performing pair logic into other seasons after validation.</p>",
+            "id": 6.0
+        }
+    ]
+}

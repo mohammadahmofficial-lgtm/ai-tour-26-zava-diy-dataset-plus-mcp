@@ -1,0 +1,15 @@
+{
+    "report_id": "870e6a0b-7035-454a-b909-d7bea1817923",
+    "user_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "prompt": "compare slaes data of our data and seattle store.",
+    "title": "Sales Data Comparison",
+    "summary": "Compare our sales data with the Seattle store\u2019s sales data. Highlight key differences, trends, and any notable performance gaps.",
+    "timestamp": "2026-10-01 06:54:11",
+    "executed_sql_queries": [
+        "SELECT\n  s.store_id,\n  s.store_name,\n  COUNT(DISTINCT o.order_id) AS number_of_orders,\n  COALESCE(SUM(oi.total_amount), 0) AS total_sales_amount,\n  COALESCE(SUM(oi.quantity), 0) AS total_units_sold,\n  CASE\n    WHEN COUNT(DISTINCT o.order_id) = 0 THEN 0\n    ELSE COALESCE(SUM(oi.total_amount), 0) / COUNT(DISTINCT o.order_id)\n  END AS average_order_value\nFROM retail.stores s\nLEFT JOIN retail.orders o\n  ON s.store_id = o.store_id\nLEFT JOIN retail.order_items oi\n  ON o.order_id = oi.order_id\n AND o.store_id = oi.store_id\nGROUP BY s.store_id, s.store_name\nORDER BY s.store_name;",
+        "WITH monthly_sales AS (\n  SELECT\n    DATE_TRUNC('month', o.order_date)::date AS month,\n    s.store_name,\n    SUM(oi.total_amount) AS sales_amount\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  JOIN retail.stores s\n    ON o.store_id = s.store_id\n  GROUP BY 1, 2\n)\nSELECT\n  month,\n  CASE\n    WHEN store_name = 'Zava Retail Seattle' THEN 'Zava Retail Seattle'\n    ELSE 'All accessible stores overall'\n  END AS comparison_group,\n  SUM(sales_amount) AS sales_amount\nFROM monthly_sales\nGROUP BY 1, 2\nORDER BY 1, 2;",
+        "SELECT c.category_name,\n       SUM(oi.total_amount) AS sales_amount,\n       SUM(oi.quantity) AS units_sold,\n       COUNT(DISTINCT o.order_id) AS order_count\nFROM retail.orders o\nJOIN retail.order_items oi\n  ON o.order_id = oi.order_id\nJOIN retail.products p\n  ON oi.product_id = p.product_id\nJOIN retail.categories c\n  ON p.category_id = c.category_id\nGROUP BY c.category_name\nORDER BY sales_amount DESC;",
+        "SELECT COUNT(*) AS seattle_order_count\nFROM retail.orders\nWHERE store_id = 1;",
+        "SELECT COUNT(*) AS order_count, MIN(order_date) AS min_order_date, MAX(order_date) AS max_order_date\nFROM retail.orders\nWHERE store_id = 1;"
+    ]
+}

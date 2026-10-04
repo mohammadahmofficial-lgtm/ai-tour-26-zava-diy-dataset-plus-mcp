@@ -1,0 +1,547 @@
+{
+    "report_id": "870e6a0b-7035-454a-b909-d7bea1817923",
+    "user_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "prompt": "compare slaes data of our data and seattle store.",
+    "title": "Sales Data Comparison",
+    "summary": "Compare our sales data with the Seattle store\u2019s sales data. Highlight key differences, trends, and any notable performance gaps.",
+    "timestamp": "2026-10-01 06:54:11",
+    "executed_sql_queries": [
+        "SELECT\n  s.store_id,\n  s.store_name,\n  COUNT(DISTINCT o.order_id) AS number_of_orders,\n  COALESCE(SUM(oi.total_amount), 0) AS total_sales_amount,\n  COALESCE(SUM(oi.quantity), 0) AS total_units_sold,\n  CASE\n    WHEN COUNT(DISTINCT o.order_id) = 0 THEN 0\n    ELSE COALESCE(SUM(oi.total_amount), 0) / COUNT(DISTINCT o.order_id)\n  END AS average_order_value\nFROM retail.stores s\nLEFT JOIN retail.orders o\n  ON s.store_id = o.store_id\nLEFT JOIN retail.order_items oi\n  ON o.order_id = oi.order_id\n AND o.store_id = oi.store_id\nGROUP BY s.store_id, s.store_name\nORDER BY s.store_name;",
+        "WITH monthly_sales AS (\n  SELECT\n    DATE_TRUNC('month', o.order_date)::date AS month,\n    s.store_name,\n    SUM(oi.total_amount) AS sales_amount\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  JOIN retail.stores s\n    ON o.store_id = s.store_id\n  GROUP BY 1, 2\n)\nSELECT\n  month,\n  CASE\n    WHEN store_name = 'Zava Retail Seattle' THEN 'Zava Retail Seattle'\n    ELSE 'All accessible stores overall'\n  END AS comparison_group,\n  SUM(sales_amount) AS sales_amount\nFROM monthly_sales\nGROUP BY 1, 2\nORDER BY 1, 2;",
+        "SELECT c.category_name,\n       SUM(oi.total_amount) AS sales_amount,\n       SUM(oi.quantity) AS units_sold,\n       COUNT(DISTINCT o.order_id) AS order_count\nFROM retail.orders o\nJOIN retail.order_items oi\n  ON o.order_id = oi.order_id\nJOIN retail.products p\n  ON oi.product_id = p.product_id\nJOIN retail.categories c\n  ON p.category_id = c.category_id\nGROUP BY c.category_name\nORDER BY sales_amount DESC;",
+        "SELECT COUNT(*) AS seattle_order_count\nFROM retail.orders\nWHERE store_id = 1;",
+        "SELECT COUNT(*) AS order_count, MIN(order_date) AS min_order_date, MAX(order_date) AS max_order_date\nFROM retail.orders\nWHERE store_id = 1;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Sales comparison: accessible stores vs. Zava Retail Seattle</strong></p><p>Your accessible-store view is effectively a <em>single-store dataset</em> in practice: <strong>Zava Retail Bellevue</strong> generated all recorded sales, while <strong>Zava Retail Seattle</strong> has <strong>0 orders</strong> and <strong>$0.00</strong> sales.</p><ul><li><strong>Accessible stores overall:</strong> <strong>$8,611,540.81</strong> in sales from <strong>36,917 orders</strong> and <strong>125,496 units</strong>; average order value was <strong>$233.27</strong>.</li><li><strong>Zava Retail Seattle:</strong> <strong>$0.00</strong> sales, <strong>0 orders</strong>, <strong>0 units</strong>; earliest and latest order dates are both <em>null</em>.</li><li><strong>Share of accessible-store sales from Seattle:</strong> <strong>0.0%</strong>.</li><li><strong>Gap vs. accessible-store total:</strong> Seattle is down <strong>$8,611,540.81</strong> in sales and <strong>36,917</strong> orders.</li></ul><p><strong>What this means:</strong> there is no measurable sales activity in Seattle to compare against the broader accessible-store performance. The entire sales base is coming from Bellevue, so any head-office comparison should treat Seattle as an inactive or data-missing location rather than an underperforming one.</p><p><strong>Category context for the active business:</strong> the largest sales drivers across the accessible stores are <em>Power Tools</em> at <strong>$3,059,141.80</strong> and <em>Storage &amp; Organization</em> at <strong>$2,041,846.44</strong>, together contributing <strong>$5,100,988.24</strong> (about <strong>59.3%</strong> of the category sales shown).</p>",
+            "id": 1.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store Name",
+                    "Total Sales Amount",
+                    "Number of Orders",
+                    "Total Units Sold",
+                    "Average Order Value"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Bellevue",
+                        "8611540.81",
+                        "36917",
+                        "125496",
+                        "233.27"
+                    ],
+                    [
+                        "Zava Retail Everett",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ],
+                    [
+                        "Zava Retail Kirkland",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ],
+                    [
+                        "Zava Retail Online",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ],
+                    [
+                        "Zava Retail Seattle",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ],
+                    [
+                        "Zava Retail Spokane",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ],
+                    [
+                        "Zava Retail Tacoma",
+                        "0.00",
+                        "0",
+                        "0",
+                        "0.00"
+                    ]
+                ]
+            },
+            "id": 2.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Zava Retail Bellevue",
+                        "Zava Retail Everett",
+                        "Zava Retail Kirkland",
+                        "Zava Retail Online",
+                        "Zava Retail Redmond",
+                        "Zava Retail Seattle",
+                        "Zava Retail Spokane",
+                        "Zava Retail Tacoma"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Total Sales Amount",
+                            "data": [
+                                8611540.81,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(201,203,207,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(201,203,207,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Total Sales Amount by Accessible Store (Seattle Highlighted)"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "callback": "function(value){return '$' + value.toLocaleString();}"
+                            }
+                        },
+                        "y": {
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "2020-01",
+                        "2020-02",
+                        "2020-03",
+                        "2020-04",
+                        "2020-05",
+                        "2020-06",
+                        "2020-07",
+                        "2020-08",
+                        "2020-09",
+                        "2020-10",
+                        "2020-11",
+                        "2020-12",
+                        "2021-01",
+                        "2021-02",
+                        "2021-03",
+                        "2021-04",
+                        "2021-05",
+                        "2021-06",
+                        "2021-07",
+                        "2021-08",
+                        "2021-09",
+                        "2021-10",
+                        "2021-11",
+                        "2021-12",
+                        "2022-01",
+                        "2022-02",
+                        "2022-03",
+                        "2022-04",
+                        "2022-05",
+                        "2022-06",
+                        "2022-07",
+                        "2022-08",
+                        "2022-09",
+                        "2022-10",
+                        "2022-11",
+                        "2022-12",
+                        "2023-01",
+                        "2023-02",
+                        "2023-03",
+                        "2023-04",
+                        "2023-05",
+                        "2023-06",
+                        "2023-07",
+                        "2023-08",
+                        "2023-09",
+                        "2023-10",
+                        "2023-11",
+                        "2023-12",
+                        "2024-01",
+                        "2024-02",
+                        "2024-03",
+                        "2024-04",
+                        "2024-05",
+                        "2024-06",
+                        "2024-07",
+                        "2024-08",
+                        "2024-09",
+                        "2024-10",
+                        "2024-11",
+                        "2024-12",
+                        "2025-01",
+                        "2025-02",
+                        "2025-03",
+                        "2025-04",
+                        "2025-05",
+                        "2025-06",
+                        "2025-07",
+                        "2025-08",
+                        "2025-09",
+                        "2025-10",
+                        "2025-11",
+                        "2025-12",
+                        "2026-01",
+                        "2026-02",
+                        "2026-03",
+                        "2026-04",
+                        "2026-05",
+                        "2026-06",
+                        "2026-07",
+                        "2026-08",
+                        "2026-09",
+                        "2026-10",
+                        "2026-11",
+                        "2026-12"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "All accessible stores overall",
+                            "data": [
+                                75948.65,
+                                100770.87,
+                                87127.66,
+                                83792.82,
+                                72618.07,
+                                77607.58,
+                                76710.99,
+                                73050.02,
+                                90104.93,
+                                80793.48,
+                                81125.67,
+                                109033.36,
+                                89798.4,
+                                99626.57,
+                                80837.44,
+                                74642.72,
+                                80649.78,
+                                82009.4,
+                                85057.12,
+                                86502.35,
+                                98097.58,
+                                103821.41,
+                                91675.02,
+                                86363.84,
+                                117263.08,
+                                108387.1,
+                                101820.42,
+                                90386.55,
+                                96063.87,
+                                109030.42,
+                                109673.93,
+                                107530.93,
+                                104403.61,
+                                114461.62,
+                                108780.78,
+                                106968.97,
+                                99200.22,
+                                113482.19,
+                                87607.46,
+                                87396.39,
+                                96845.34,
+                                95988.33,
+                                101967.12,
+                                98242.06,
+                                102322.19,
+                                86953.03,
+                                79146.82,
+                                106910.16,
+                                102695.63,
+                                111410.43,
+                                94338.01,
+                                100769.66,
+                                103588.03,
+                                92004.28,
+                                108298.43,
+                                91482.4,
+                                107135.38,
+                                90098.13,
+                                103098.11,
+                                101567.32,
+                                111657.32,
+                                119116.36,
+                                116802.16,
+                                102404.99,
+                                126465.75,
+                                113242.96,
+                                115310.27,
+                                119199.46,
+                                127027.29,
+                                120157.23,
+                                112580.88,
+                                106140.71,
+                                136610.22,
+                                144794.77,
+                                121196.47,
+                                109382.8,
+                                126808.58,
+                                126343.78,
+                                125296.29,
+                                130105.15,
+                                122782.77,
+                                125219.62,
+                                118632.96,
+                                129177.89
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.15)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "pointRadius": 2
+                        },
+                        {
+                            "label": "Seattle",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.15)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "pointRadius": 2
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Monthly Sales Trend: All Accessible Stores Overall vs Seattle"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Month"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Sales Amount"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Category / Product Type",
+                    "All Accessible Stores Sales",
+                    "Seattle Sales",
+                    "Seattle Share of Overall"
+                ],
+                "rows": [
+                    [
+                        "POWER TOOLS",
+                        "$3,059,141.80",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "STORAGE & ORGANIZATION",
+                        "$2,041,846.44",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "PAINT & FINISHES",
+                        "$633,901.39",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "LUMBER & BUILDING MATERIALS",
+                        "$549,251.49",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "ELECTRICAL",
+                        "$509,955.15",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "HAND TOOLS",
+                        "$499,665.18",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "GARDEN & OUTDOOR",
+                        "$494,624.64",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "PLUMBING",
+                        "$479,110.49",
+                        "$0.00",
+                        "0.0%"
+                    ],
+                    [
+                        "HARDWARE",
+                        "$344,044.23",
+                        "$0.00",
+                        "0.0%"
+                    ]
+                ]
+            },
+            "id": 5.0
+        }
+    ]
+}

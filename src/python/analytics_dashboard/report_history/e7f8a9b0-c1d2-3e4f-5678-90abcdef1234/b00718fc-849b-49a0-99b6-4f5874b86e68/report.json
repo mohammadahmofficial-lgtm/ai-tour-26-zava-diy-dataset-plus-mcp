@@ -1,0 +1,883 @@
+{
+    "report_id": "b00718fc-849b-49a0-99b6-4f5874b86e68",
+    "user_id": "e7f8a9b0-c1d2-3e4f-5678-90abcdef1234",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "timestamp": "2026-09-29 00:25:37",
+    "executed_sql_queries": [
+        "WITH order_products AS (\n  SELECT DISTINCT oi.order_id, p.product_name\n  FROM retail.order_items oi\n  JOIN retail.products p ON p.product_id = oi.product_id\n), pair_counts AS (\n  SELECT\n    LEAST(op1.product_name, op2.product_name) AS product_1,\n    GREATEST(op1.product_name, op2.product_name) AS product_2,\n    COUNT(DISTINCT op1.order_id) AS co_purchase_count\n  FROM order_products op1\n  JOIN order_products op2\n    ON op1.order_id = op2.order_id\n   AND op1.product_name < op2.product_name\n  GROUP BY 1, 2\n), total_orders AS (\n  SELECT COUNT(DISTINCT order_id) AS total_order_count\n  FROM retail.orders\n)\nSELECT\n  pc.product_1,\n  pc.product_2,\n  pc.co_purchase_count,\n  ROUND(100.0 * pc.co_purchase_count / t.total_order_count, 2) AS order_share,\n  DENSE_RANK() OVER (ORDER BY pc.co_purchase_count DESC, pc.product_1, pc.product_2) AS bundle_rank\nFROM pair_counts pc\nCROSS JOIN total_orders t\nORDER BY bundle_rank, pc.product_1, pc.product_2\nLIMIT 100",
+        "WITH order_items_dedup AS (\n    SELECT DISTINCT\n        o.order_id,\n        EXTRACT(YEAR FROM o.order_date)::int AS order_year,\n        oi.product_id,\n        p.product_name\n    FROM retail.orders o\n    JOIN retail.order_items oi\n        ON o.order_id = oi.order_id\n    JOIN retail.products p\n        ON oi.product_id = p.product_id\n    WHERE EXTRACT(YEAR FROM o.order_date)::int BETWEEN 2020 AND 2023\n), order_pairs AS (\n    SELECT\n        a.order_id,\n        a.order_year,\n        CASE WHEN a.product_name < b.product_name THEN a.product_name ELSE b.product_name END AS product_1,\n        CASE WHEN a.product_name < b.product_name THEN b.product_name ELSE a.product_name END AS product_2\n    FROM order_items_dedup a\n    JOIN order_items_dedup b\n        ON a.order_id = b.order_id\n       AND a.product_id < b.product_id\n), pair_counts AS (\n    SELECT\n        order_year,\n        product_1 || ' + ' || product_2 AS product_combination,\n        COUNT(DISTINCT order_id) AS seasonal_bundle_count,\n        COUNT(DISTINCT order_id)::numeric / SUM(COUNT(DISTINCT order_id)) OVER (PARTITION BY order_year) AS seasonal_order_share,\n        ROW_NUMBER() OVER (PARTITION BY order_year ORDER BY COUNT(DISTINCT order_id) DESC, product_1, product_2) AS bundle_rank\n    FROM order_pairs\n    GROUP BY order_year, product_1, product_2\n)\nSELECT\n    order_year,\n    product_combination,\n    seasonal_bundle_count,\n    ROUND(seasonal_order_share, 6) AS seasonal_order_share,\n    bundle_rank\nFROM pair_counts\nWHERE bundle_rank <= 10\nORDER BY order_year, bundle_rank;",
+        "SELECT store_id, store_name, CASE WHEN store_name IS NULL THEN 'UNKNOWN' ELSE store_name END AS store_location_key FROM retail.stores ORDER BY store_id",
+        "WITH counts AS ( SELECT 'overall'::text AS period, COUNT(*)::bigint AS total_orders, 0 AS sort_key FROM retail.orders UNION ALL SELECT EXTRACT(YEAR FROM order_date)::text AS period, COUNT(*)::bigint AS total_orders, 1 AS sort_key FROM retail.orders GROUP BY EXTRACT(YEAR FROM order_date) ) SELECT period, total_orders FROM counts ORDER BY sort_key, period"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Common bundles</strong> are product pairs that appear together often enough to suggest a repeatable buying pattern. In this dataset, the strongest overall bundle is <em>Digital Caliper 6-inch + Wood Rasp Set</em> with <strong>7 co-purchases</strong>, representing <strong>13%</strong> of the orders in the bundle list.</p><p>The next tier of frequently co-purchased pairs includes several combinations at <strong>6 co-purchases</strong> and <strong>12%</strong> order share, such as <em>Ball Peen Hammer 12oz + Pipe Wrench Set</em>, <em>Blown-In Insulation R-30 + OSB Sheathing 4x8x7/16</em>, and <em>Metric Hex Key Set + Precision Screwdriver Kit</em>.</p><p>A broader cluster of bundles appears at <strong>5 co-purchases</strong> and <strong>10%</strong> share each. Examples include:</p><ul><li><em>Bathroom Lavatory Faucet + PTFE Thread Tape White</em></li><li><em>Circular Saw 7-1/4 inch + Track Saw</em></li><li><em>Speed Square 7-inch + Tape Measure 25-foot</em></li><li><em>Oil-Based Wood Stain + Universal Bonding Primer</em></li><li><em>Phillips Screwdriver Set + Precision Screwdriver Kit</em></li></ul><p>These pairings suggest clear task-based bundles: measuring tools, fastening tools, plumbing supplies, painting prep, and framing/material combinations. The seasonal view confirms that some bundles recur year after year, though at very small shares of annual orders. For example, <em>Locking Caster Set + Padlock Set Keyed Alike</em> reached <strong>4 orders</strong> in 2023, while <em>Bathroom Lavatory Faucet + PTFE Thread Tape White</em> and <em>Digital Caliper 6-inch + Wood Rasp Set</em> each reached <strong>3 orders</strong> in 2021.</p><p><strong>Practical definition of a common bundle:</strong> a pair that appears in at least <strong>5 orders</strong> overall, or shows repeated annual recurrence with a measurable share of yearly orders. In this data, that threshold captures the most actionable combinations while filtering out one-off pairings.</p>",
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Bundle Rank",
+                    "Product Pair",
+                    "Co-Purchase Count",
+                    "Share of Orders"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Digital Caliper 6-inch + Wood Rasp Set",
+                        "7",
+                        "0.13"
+                    ],
+                    [
+                        "2",
+                        "Ball Peen Hammer 12oz + Pipe Wrench Set",
+                        "6",
+                        "0.12"
+                    ],
+                    [
+                        "3",
+                        "Blown-In Insulation R-30 + OSB Sheathing 4x8x7/16",
+                        "6",
+                        "0.12"
+                    ],
+                    [
+                        "4",
+                        "Metric Hex Key Set + Precision Screwdriver Kit",
+                        "6",
+                        "0.12"
+                    ],
+                    [
+                        "5",
+                        "Artist Detail Brush Set + Metal Paint Tray 9-inch",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "6",
+                        "Bathroom Lavatory Faucet + PTFE Thread Tape White",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "7",
+                        "Circular Saw 7-1/4 inch + Track Saw",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "8",
+                        "Common Nail Assortment + Countertop Support Bracket",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "9",
+                        "Compact Recip Saw + Impact Wrench 1/2-inch",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "10",
+                        "Digital Caliper 6-inch + Metric Hex Key Set",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "11",
+                        "Fire Resistant Drywall + Moisture Resistant Drywall",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "12",
+                        "Flathead Screwdriver Set + Riffler File Set",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "13",
+                        "Floor Polyurethane + Synthetic Brush Set",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "14",
+                        "Garden Rake Steel Tines + Herb Garden Seed Set",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "15",
+                        "Hardwood Mulch 2 Cu Ft + Potting Mix Premium 40lb",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "16",
+                        "Insulated Screwdriver Set + Speed Square 7-inch",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "17",
+                        "Needle-Nose Pliers 6-inch + Riffler File Set",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "18",
+                        "Oil-Based Wood Stain + Paint Bucket Grid",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "19",
+                        "Oil-Based Wood Stain + Universal Bonding Primer",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "20",
+                        "Phillips Screwdriver Set + Precision Screwdriver Kit",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "21",
+                        "Precision Screwdriver Kit + T-Handle Hex Set",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "22",
+                        "Speed Square 7-inch + Tape Measure 25-foot",
+                        "5",
+                        "0.10"
+                    ],
+                    [
+                        "23",
+                        "Adjustable Wrench 10-inch + Sledge Hammer 3lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "24",
+                        "All-Purpose Fertilizer 50lb + Soaker Hose 25-foot",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "25",
+                        "Anvil Pruners Heavy Duty + Drinking Water Safe Hose",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "26",
+                        "Artist Detail Brush Set + Pre-Taped Masking Film",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "27",
+                        "Ball Peen Hammer 12oz + Ratcheting Screwdriver",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "28",
+                        "Ball Peen Hammer 12oz + Riffler File Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "29",
+                        "Ball Peen Hammer 12oz + Sledge Hammer 3lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "30",
+                        "Ball Peen Hammer 12oz + Wood Rasp Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "31",
+                        "Baseboard Molding 8ft + Chair Rail Molding",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "32",
+                        "Blown-In Insulation R-30 + Pine Board 1x4x8",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "33",
+                        "Blown-In Insulation R-30 + Treated 2x8x12 Joist",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "34",
+                        "Brushless Impact Driver + Compact Recip Saw",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "35",
+                        "Brushless Impact Driver + Cordless Drill 18V Li-Ion",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "36",
+                        "Cabinet Pull 4-inch Centers + Deck Screws 2-1/2 inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "37",
+                        "Canvas Drop Cloth 9x12 + Stain-Blocking Primer",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "38",
+                        "Ceiling Storage Rack 4x8 + Tool Bag Canvas 18-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "39",
+                        "Chain Lock Door Security + Floating Shelf Bracket",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "40",
+                        "Chair Rail Molding + Crown Molding Pine 8ft",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "41",
+                        "Clear Polyurethane Satin + Pre-Taped Masking Film",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "42",
+                        "Compact Impact Driver + File Belt Sander",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "43",
+                        "Coping Saw + Needle-Nose Pliers 6-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "44",
+                        "Cordless Jigsaw 20V + Track Saw",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "45",
+                        "Cordless Miter Saw 10-inch + Router Table Combo",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "46",
+                        "Craft Storage Drawers + Heavy Duty Tote 35-Gallon",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "47",
+                        "Deck and Fence Stain + Oil-Based Polyurethane",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "48",
+                        "Digital Caliper 6-inch + Lineman's Pliers 9-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "49",
+                        "Digital Caliper 6-inch + T-Handle Hex Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "50",
+                        "Douglas Fir 2x6x10 + Durock Cement Board",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "51",
+                        "Drain Cleaning Chemical + Push-Fit Connectors",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "52",
+                        "Drain Cleaning Chemical + PVC Pipe 1-1/2 inch x 10ft",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "53",
+                        "Drywall Screws 1-5/8 inch + Locking Caster Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "54",
+                        "Exterior Primer-Paint Combo + Plastic Drop Cloth",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "55",
+                        "Finishing Hammer 13oz + Needle-Nose Pliers 6-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "56",
+                        "Fixed Caster 3-inch + Shelf Bracket 8-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "57",
+                        "Flathead Screwdriver Set + Needle-Nose Pliers 6-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "58",
+                        "Flathead Screwdriver Set + Ratcheting Screwdriver",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "59",
+                        "Flathead Screwdriver Set + Speed Square 7-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "60",
+                        "Flower Seed Mix Wildflower + Impact Sprinkler",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "61",
+                        "Flower Seed Mix Wildflower + Organic Compost 40lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "62",
+                        "Flower Seed Mix Wildflower + Potting Mix Premium 40lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "63",
+                        "Flower Seed Mix Wildflower + Rubber Mulch Black",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "64",
+                        "Folding Rule 6-foot + Metric Hex Key Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "65",
+                        "Garage Ceiling Hoist + Pegboard Panel 4x8",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "66",
+                        "Garden Hose 50-foot + Impact Sprinkler",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "67",
+                        "Gel Stain + Interior Eggshell Paint",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "68",
+                        "GFCI Breaker 20-Amp + Twist-On Connectors",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "69",
+                        "Hanging Basket Planter + Oscillating Sprinkler",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "70",
+                        "Heavy Duty Wall Hook Set + Pegboard Tool Holder Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "71",
+                        "High Strength Mix 80lb + OSB Sheathing 4x8x7/16",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "72",
+                        "Impact Wrench 1/2-inch + Multi-Tool Oscillating",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "73",
+                        "Insulated Screwdriver Set + T-Handle Hex Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "74",
+                        "Level 24-inch + Riffler File Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "75",
+                        "Level 24-inch + Sledge Hammer 3lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "76",
+                        "Level 24-inch + Wood Rasp Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "77",
+                        "Lineman's Pliers 9-inch + Needle-Nose Pliers 6-inch",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "78",
+                        "Lineman's Pliers 9-inch + Riffler File Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "79",
+                        "Lineman's Pliers 9-inch + Sledge Hammer 3lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "80",
+                        "Locking Caster Set + Padlock Set Keyed Alike",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "81",
+                        "Magnetic Tool Holder + Pegboard Hook Set 50-piece",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "82",
+                        "Magnetic Tool Holder + Wall Mount Cabinet",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "83",
+                        "Marine Plywood 4x8x3/4 + Treated 2x8x12 Joist",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "84",
+                        "Metal Primer + Paint Bucket Grid",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "85",
+                        "Metal Storage Cabinet 72-inch + Wooden Storage Shelves",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "86",
+                        "Metric Hex Key Set + Tape Measure 25-foot",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "87",
+                        "Metric Wrench Set + Riffler File Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "88",
+                        "Pegboard Panel 4x8 + Safety Net for Storage",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "89",
+                        "Pegboard Tool Holder Set + Plastic Tool Box Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "90",
+                        "Phillips Screwdriver Set + T-Handle Hex Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "91",
+                        "Pipe Wrench Set + T-Handle Hex Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "92",
+                        "Plastic Planter Set + Soaker Hose 25-foot",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "93",
+                        "Poplar Board 1x6x8 + Quikrete Mix 80lb",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "94",
+                        "Poplar Board 1x6x8 + Treated 2x8x12 Joist",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "95",
+                        "Professional Claw Hammer 16oz + Ratcheting Screwdriver",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "96",
+                        "Quarter Round 8ft + WonderBoard Lite",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "97",
+                        "Ratcheting Screwdriver + SAE Hex Key Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "98",
+                        "Ratcheting Screwdriver + T-Handle Hex Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "99",
+                        "Riffler File Set + T-Handle Hex Set",
+                        "4",
+                        "0.08"
+                    ],
+                    [
+                        "100",
+                        "Round Fence Post 8ft + Soundproof Drywall 4x8",
+                        "4",
+                        "0.08"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Digital Caliper 6-inch + Wood Rasp Set",
+                        "Ball Peen Hammer 12oz + Pipe Wrench Set",
+                        "Blown-In Insulation R-30 + OSB Sheathing 4x8x7/16",
+                        "Metric Hex Key Set + Precision Screwdriver Kit",
+                        "Artist Detail Brush Set + Metal Paint Tray 9-inch",
+                        "Bathroom Lavatory Faucet + PTFE Thread Tape White",
+                        "Circular Saw 7-1/4 inch + Track Saw",
+                        "Common Nail Assortment + Countertop Support Bracket",
+                        "Compact Recip Saw + Impact Wrench 1/2-inch",
+                        "Digital Caliper 6-inch + Metric Hex Key Set"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Co-purchase count",
+                            "data": [
+                                7,
+                                6,
+                                6,
+                                6,
+                                5,
+                                5,
+                                5,
+                                5,
+                                5,
+                                5
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Top Co-Purchase Combinations Overall"
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Co-purchase count"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Product combination"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store Location",
+                    "Store ID",
+                    "Total Orders"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Seattle",
+                        "1",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "2",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Tacoma",
+                        "3",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Spokane",
+                        "4",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Everett",
+                        "5",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "6",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Kirkland",
+                        "7",
+                        "5197"
+                    ],
+                    [
+                        "Zava Retail Online",
+                        "8",
+                        "5197"
+                    ]
+                ]
+            },
+            "id": 4
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "2020",
+                        "2021",
+                        "2022",
+                        "2023",
+                        "2024",
+                        "2025",
+                        "2026"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Total Orders",
+                            "data": [
+                                652,
+                                632,
+                                754,
+                                707,
+                                762,
+                                793,
+                                897
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Top Seasonal Bundle Count",
+                            "data": [
+                                2,
+                                3,
+                                3,
+                                4,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Top Seasonal Order Share (%)",
+                            "data": [
+                                0.1712,
+                                0.276,
+                                0.2244,
+                                0.3257,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "borderColor": "rgba(75,192,192,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Comparison of Bundle Patterns by Order Year (2020\u20132026)"
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": "function(context){ const label = context.dataset.label || ''; const value = context.raw; if(label.includes('Share')) return `${label}: ${value}%`; return `${label}: ${value}`; }"
+                            }
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Order Year"
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Count / Share"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Key bundle patterns</strong> show a mix of <em>tool-to-tool</em>, <em>project-material</em>, and <em>garden/home-improvement</em> pairings. The top bundle is <strong>Digital Caliper 6-inch + Wood Rasp Set</strong> with <strong>7 co-purchases</strong>, representing <strong>13%</strong> of the top-bundle set. Two bundles tie next at <strong>6 co-purchases</strong> each (<strong>12%</strong>): <strong>Ball Peen Hammer 12oz + Pipe Wrench Set</strong>, <strong>Blown-In Insulation R-30 + OSB Sheathing 4x8x7/16</strong>, and <strong>Metric Hex Key Set + Precision Screwdriver Kit</strong>.</p><p><strong>Cross-category behavior is strong</strong>: many high-frequency pairs combine complementary items rather than identical products. Examples include <strong>Bathroom Lavatory Faucet + PTFE Thread Tape White</strong>, <strong>Speed Square 7-inch + Tape Measure 25-foot</strong>, and <strong>Oil-Based Wood Stain + Universal Bonding Primer</strong>. This suggests customers often bundle items needed to complete a single task in one trip.</p><p><strong>Seasonal shifts are notable.</strong> In <strong>2020</strong>, the leading seasonal bundles were mostly power-tool and construction combinations, each appearing <strong>2 times</strong> with a <strong>0.1712% order share</strong>. By <strong>2021</strong>, plumbing and precision-tool bundles became more prominent, led by <strong>Bathroom Lavatory Faucet + PTFE Thread Tape White</strong>, <strong>Coping Saw + Ratcheting Screwdriver</strong>, and <strong>Digital Caliper 6-inch + Wood Rasp Set</strong>, each at <strong>3 orders</strong> and <strong>0.2760%</strong> share.</p><p>In <strong>2022</strong>, organizational and hand-tool pairings rose, especially <strong>Heavy Duty Wall Hook Set + Pegboard Tool Holder Set</strong> and <strong>Lineman's Pliers 9-inch + Needle-Nose Pliers 6-inch</strong>, both at <strong>3 orders</strong> and <strong>0.2244%</strong> share. In <strong>2023</strong>, the standout bundle was <strong>Locking Caster Set + Padlock Set Keyed Alike</strong> with <strong>4 orders</strong> and the highest seasonal share at <strong>0.3257%</strong>, indicating a shift toward storage/security-related purchases.</p><p><strong>Interpretation:</strong> bundle behavior appears to evolve from <em>construction and power tools</em> in earlier periods toward <em>plumbing, organization, and security/storage</em> in later periods. The recurring presence of measurement, fastening, and finishing tools across the top bundles suggests customers are increasingly buying <strong>task-complete kits</strong> rather than isolated items.</p>",
+            "id": 6
+        }
+    ]
+}

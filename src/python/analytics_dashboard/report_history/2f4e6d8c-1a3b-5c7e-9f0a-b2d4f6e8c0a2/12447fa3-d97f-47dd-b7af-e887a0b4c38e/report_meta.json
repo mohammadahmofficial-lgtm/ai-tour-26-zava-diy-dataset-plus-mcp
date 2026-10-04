@@ -1,0 +1,17 @@
+{
+    "report_id": "12447fa3-d97f-47dd-b7af-e887a0b4c38e",
+    "user_id": "2f4e6d8c-1a3b-5c7e-9f0a-b2d4f6e8c0a2",
+    "prompt": "identify top 3 the months with lowest sales by orders, and also by revenue. then calculate the average monthly sales statistics for that year and compare it with these months.",
+    "title": "Monthly Sales Comparison Analysis",
+    "summary": "Identify the three months with the lowest sales by order count and by revenue for the specified year. Then calculate the year\u2019s average monthly sales metrics and compare those averages against the low-performing months.",
+    "timestamp": "2026-09-29 03:19:39",
+    "executed_sql_queries": [
+        "SELECT DISTINCT EXTRACT(YEAR FROM order_date)::int AS year FROM retail.orders ORDER BY year;",
+        "SELECT store_id, store_name, is_online FROM retail.stores ORDER BY store_id;",
+        "WITH monthly AS (\n  SELECT\n    DATE_TRUNC('month', o.order_date)::date AS month_start,\n    COUNT(DISTINCT o.order_id) AS order_count,\n    SUM(oi.total_amount) AS revenue\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON oi.order_id = o.order_id\n  JOIN retail.stores s\n    ON s.store_id = o.store_id\n  WHERE EXTRACT(YEAR FROM o.order_date) = 2026\n    AND s.is_online = false\n  GROUP BY 1\n)\nSELECT month_start, order_count, revenue\nFROM monthly\nORDER BY month_start;",
+        "WITH monthly AS (\n  SELECT\n    DATE_TRUNC('month', o.order_date)::date AS month_start,\n    COUNT(DISTINCT o.order_id) AS order_count,\n    SUM(oi.total_amount) AS revenue\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON oi.order_id = o.order_id\n  JOIN retail.stores s\n    ON s.store_id = o.store_id\n  WHERE EXTRACT(YEAR FROM o.order_date) = 2025\n  GROUP BY 1\n)\nSELECT month_start, order_count, revenue\nFROM monthly\nORDER BY month_start;",
+        "WITH yearly AS (\n  SELECT\n    COUNT(DISTINCT o.order_id) AS order_count,\n    COALESCE(SUM(oi.total_amount), 0) AS revenue\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON oi.order_id = o.order_id\n  JOIN retail.stores s\n    ON s.store_id = o.store_id\n  WHERE EXTRACT(YEAR FROM o.order_date) = 2026\n    AND s.is_online = TRUE\n)\nSELECT order_count, revenue\nFROM yearly;",
+        "SELECT DATE_TRUNC('month', o.order_date)::date AS month_start, COUNT(*) AS order_count\nFROM retail.orders o\nJOIN retail.stores s ON o.store_id = s.store_id\nWHERE s.rls_user_id IS NOT NULL\nGROUP BY 1\nORDER BY order_count ASC, month_start ASC\nLIMIT 3;",
+        "WITH monthly_revenue AS (\n  SELECT\n    DATE_TRUNC('month', o.order_date) AS month_start,\n    EXTRACT(MONTH FROM o.order_date) AS month_num,\n    TO_CHAR(o.order_date, 'Month') AS month_name,\n    SUM(oi.total_amount) AS revenue\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  JOIN retail.stores s\n    ON o.store_id = s.store_id\n  WHERE EXTRACT(YEAR FROM o.order_date) = 2026\n    AND s.is_online = TRUE\n  GROUP BY 1, 2, 3\n)\nSELECT month_name, month_num, revenue\nFROM monthly_revenue\nORDER BY revenue ASC, month_num ASC\nLIMIT 3;"
+    ]
+}

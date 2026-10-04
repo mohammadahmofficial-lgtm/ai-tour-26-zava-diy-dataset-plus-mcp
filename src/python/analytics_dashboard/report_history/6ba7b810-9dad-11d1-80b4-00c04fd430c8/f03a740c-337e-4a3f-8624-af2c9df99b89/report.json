@@ -1,0 +1,350 @@
+{
+    "report_id": "f03a740c-337e-4a3f-8624-af2c9df99b89",
+    "user_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    "prompt": "Which products have the widest gap between inventory levels and sales velocity?",
+    "title": "Inventory vs Sales Gap Analysis",
+    "summary": "Identify products where inventory levels are disproportionately high relative to sales velocity. This helps surface slow-moving items with the widest stock-to-demand gap.",
+    "timestamp": "2026-09-29 03:11:17",
+    "executed_sql_queries": [
+        "WITH max_dt AS (SELECT MAX(order_date) AS max_order_date FROM retail.orders) SELECT max_order_date FROM max_dt;",
+        "WITH max_dt AS (\n  SELECT MAX(order_date) AS max_order_date\n  FROM retail.orders\n), inv AS (\n  SELECT product_id, SUM(stock_level) AS total_current_on_hand_inventory\n  FROM retail.inventory\n  GROUP BY product_id\n), sales AS (\n  SELECT oi.product_id, SUM(oi.quantity) AS total_units_sold_recent_period\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n  CROSS JOIN max_dt\n  WHERE o.order_date > (max_dt.max_order_date - INTERVAL '30 days')\n    AND o.order_date <= max_dt.max_order_date\n  GROUP BY oi.product_id\n)\nSELECT\n  p.product_id,\n  p.product_name,\n  p.sku,\n  c.category_name AS category_or_type,\n  COALESCE(inv.total_current_on_hand_inventory, 0) AS total_current_on_hand_inventory,\n  COALESCE(sales.total_units_sold_recent_period, 0) AS total_units_sold_recent_period,\n  30 AS recent_sales_window_days,\n  ROUND(COALESCE(sales.total_units_sold_recent_period, 0)::numeric / 30, 4) AS sales_velocity\nFROM retail.products p\nLEFT JOIN retail.product_types pt\n  ON p.type_id = pt.type_id\nLEFT JOIN retail.categories c\n  ON p.category_id = c.category_id\nLEFT JOIN inv\n  ON p.product_id = inv.product_id\nLEFT JOIN sales\n  ON p.product_id = sales.product_id\nORDER BY p.product_id\nLIMIT 50;",
+        "SELECT MIN(order_date) AS min_order_date, MAX(order_date) AS max_order_date FROM retail.orders;",
+        "WITH params AS (\n  SELECT DATE '2026-12-31' AS end_date,\n         DATE '2026-12-02' AS start_date,\n         30::numeric AS window_days\n),\nrecent_sales AS (\n  SELECT oi.product_id,\n         SUM(oi.quantity) AS units_sold_recent_period\n  FROM retail.order_items oi\n  JOIN retail.orders o\n    ON o.order_id = oi.order_id\n  JOIN params p\n    ON o.order_date BETWEEN p.start_date AND p.end_date\n  GROUP BY oi.product_id\n),\ncurrent_inventory AS (\n  SELECT i.product_id,\n         SUM(i.stock_level) AS total_stock_level\n  FROM retail.inventory i\n  GROUP BY i.product_id\n),\nproduct_metrics AS (\n  SELECT p.product_id,\n         p.sku,\n         p.product_name,\n         COALESCE(ci.total_stock_level, 0) AS total_stock_level,\n         COALESCE(rs.units_sold_recent_period, 0) AS units_sold_recent_period,\n         COALESCE(rs.units_sold_recent_period, 0) / (SELECT window_days FROM params) AS sales_velocity,\n         COALESCE(ci.total_stock_level, 0) - (COALESCE(rs.units_sold_recent_period, 0) / (SELECT window_days FROM params)) AS gap_score\n  FROM retail.products p\n  LEFT JOIN current_inventory ci\n    ON ci.product_id = p.product_id\n  LEFT JOIN recent_sales rs\n    ON rs.product_id = p.product_id\n)\nSELECT product_id,\n       sku,\n       product_name,\n       total_stock_level,\n       units_sold_recent_period,\n       ROUND(sales_velocity::numeric, 4) AS sales_velocity,\n       ROUND(gap_score::numeric, 4) AS gap_score,\n       RANK() OVER (ORDER BY gap_score DESC) AS gap_rank\nFROM product_metrics\nORDER BY gap_score DESC, product_id\nLIMIT 20;",
+        "WITH recent_sales AS (\n  SELECT oi.product_id,\n         SUM(oi.quantity) AS units_sold_recent_period\n  FROM retail.order_items oi\n  JOIN retail.orders o ON o.order_id = oi.order_id\n  WHERE o.order_date >= CURRENT_DATE - INTERVAL '30 days'\n  GROUP BY oi.product_id\n), product_inventory AS (\n  SELECT i.product_id,\n         SUM(i.stock_level) AS total_stock_level\n  FROM retail.inventory i\n  GROUP BY i.product_id\n), ranked AS (\n  SELECT p.product_id,\n         p.sku,\n         p.product_name,\n         COALESCE(pi.total_stock_level, 0) AS total_stock_level,\n         COALESCE(rs.units_sold_recent_period, 0) AS units_sold_recent_period,\n         COALESCE(rs.units_sold_recent_period, 0) / 30.0 AS sales_velocity,\n         COALESCE(pi.total_stock_level, 0) - (COALESCE(rs.units_sold_recent_period, 0) / 30.0) AS gap_score\n  FROM retail.products p\n  LEFT JOIN product_inventory pi ON pi.product_id = p.product_id\n  LEFT JOIN recent_sales rs ON rs.product_id = p.product_id\n)\nSELECT *\nFROM ranked\nORDER BY gap_score DESC, total_stock_level DESC, units_sold_recent_period ASC\nLIMIT 10;",
+        "WITH top_products AS (\n  SELECT 102 AS product_id UNION ALL\n  SELECT 106 UNION ALL\n  SELECT 77 UNION ALL\n  SELECT 115 UNION ALL\n  SELECT 331 UNION ALL\n  SELECT 219 UNION ALL\n  SELECT 80 UNION ALL\n  SELECT 195 UNION ALL\n  SELECT 230 UNION ALL\n  SELECT 145\n), recent_sales_by_store AS (\n  SELECT oi.store_id,\n         oi.product_id,\n         SUM(oi.quantity) AS units_sold_recent_period\n  FROM retail.order_items oi\n  JOIN retail.orders o ON o.order_id = oi.order_id\n  JOIN top_products tp ON tp.product_id = oi.product_id\n  WHERE o.order_date >= CURRENT_DATE - INTERVAL '30 days'\n  GROUP BY oi.store_id, oi.product_id\n), inventory_by_store AS (\n  SELECT i.store_id,\n         i.product_id,\n         SUM(i.stock_level) AS store_level_stock_level\n  FROM retail.inventory i\n  JOIN top_products tp ON tp.product_id = i.product_id\n  GROUP BY i.store_id, i.product_id\n)\nSELECT s.store_name,\n       p.product_id,\n       p.sku,\n       p.product_name,\n       COALESCE(inv.store_level_stock_level, 0) AS store_level_stock_level,\n       COALESCE(rs.units_sold_recent_period, 0) AS store_level_units_sold_recent_period,\n       COALESCE(rs.units_sold_recent_period, 0) / 30.0 AS store_level_sales_velocity\nFROM top_products tp\nJOIN retail.products p ON p.product_id = tp.product_id\nJOIN retail.inventory i ON i.product_id = tp.product_id\nJOIN retail.stores s ON s.store_id = i.store_id\nLEFT JOIN inventory_by_store inv ON inv.store_id = i.store_id AND inv.product_id = tp.product_id\nLEFT JOIN recent_sales_by_store rs ON rs.store_id = i.store_id AND rs.product_id = tp.product_id\nORDER BY p.product_id, s.store_name;",
+        "SELECT store_id, store_name, rls_user_id, is_online FROM retail.stores ORDER BY store_id;",
+        "SELECT MAX(o.order_date) AS latest_order_date, MIN(o.order_date) AS earliest_order_date, COUNT(*) AS order_count FROM retail.orders o;",
+        "SELECT COUNT(*) AS inventory_rows, COUNT(DISTINCT store_id) AS stores_with_inventory, COUNT(DISTINCT product_id) AS products_with_inventory, COUNT(DISTINCT (store_id, product_id)) AS distinct_store_product_pairs FROM retail.inventory;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Goal:</strong> identify products with the largest mismatch between <em>current on-hand inventory</em> and <em>recent sales velocity</em> across accessible stores (30-day window ending <strong>2026-12-31</strong>).</p><p><strong>How the mismatch is measured:</strong> <code>gap_score = current inventory - sales velocity</code>. Higher gap scores indicate more stock sitting relative to recent demand.</p><p><strong>Top overstocked products in the accessible-store scope</strong> are heavily concentrated in Bellevue, with the widest gaps all above <strong>4,000 units</strong>:</p><ul><li><strong>Microfiber Roller Covers</strong> (SKU <code>PFRL000022</code>) \u2014 <strong>5,545</strong> on hand vs <strong>18</strong> sold in 30 days; velocity <strong>0.6000/day</strong>; gap <strong>5,544.4</strong>.</li><li><strong>Aerosol Primer Spray</strong> (<code>PFSP000026</code>) \u2014 <strong>4,958</strong> on hand vs <strong>24</strong> sold; velocity <strong>0.8000/day</strong>; gap <strong>4,957.2</strong>.</li><li><strong>Sliding Miter Saw 12-inch</strong> (<code>PTMS000046</code>) \u2014 <strong>4,922</strong> on hand vs <strong>18</strong> sold; velocity <strong>0.6000/day</strong>; gap <strong>4,921.4</strong>.</li><li><strong>Semi-Transparent Deck Stain</strong> (<code>PFWS000034</code>) \u2014 <strong>4,767</strong> on hand vs <strong>17</strong> sold; velocity <strong>0.5667/day</strong>; gap <strong>4,766.4</strong>.</li><li><strong>Pipe Thread Sealant Paste</strong> (<code>PLTFL005</code>) \u2014 <strong>4,533</strong> on hand vs <strong>11</strong> sold; velocity <strong>0.3667/day</strong>; gap <strong>4,532.6</strong>.</li></ul><p><strong>Other large gaps:</strong> <strong>High Strength Mix 80lb</strong> (<code>LBCNC003</code>) at <strong>4,530</strong>, <strong>Miter Saw Stand</strong> (<code>PTMS000049</code>) at <strong>4,377.4</strong>, and <strong>Lightweight Drywall 4x8</strong> (<code>LBDW000009</code>) at <strong>4,267.6</strong>.</p><p><strong>Interpretation:</strong> these products have very high current stock but low recent sell-through, suggesting the biggest inventory-to-demand mismatches. Prioritize review for replenishment pauses, markdowns, or inter-store transfers, especially for the top five items above.</p>",
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Product Name",
+                    "SKU",
+                    "Category/Type",
+                    "Total Stock Level",
+                    "Units Sold (30d)",
+                    "Sales Velocity",
+                    "Gap Score"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Microfiber Roller Covers",
+                        "PFRL000022",
+                        "PAINT & FINISHING",
+                        "5545",
+                        "18",
+                        "0.6000",
+                        "5544.4000"
+                    ],
+                    [
+                        "2",
+                        "Aerosol Primer Spray",
+                        "PFSP000026",
+                        "PAINT & FINISHING",
+                        "4958",
+                        "24",
+                        "0.8000",
+                        "4957.2000"
+                    ],
+                    [
+                        "3",
+                        "Sliding Miter Saw 12-inch",
+                        "PTMS000046",
+                        "POWER TOOLS",
+                        "4922",
+                        "18",
+                        "0.6000",
+                        "4921.4000"
+                    ],
+                    [
+                        "4",
+                        "Semi-Transparent Deck Stain",
+                        "PFWS000034",
+                        "PAINT & FINISHING",
+                        "4767",
+                        "17",
+                        "0.5667",
+                        "4766.4333"
+                    ],
+                    [
+                        "5",
+                        "Pipe Thread Sealant Paste",
+                        "PLTFL005",
+                        "PLUMBING",
+                        "4533",
+                        "11",
+                        "0.3667",
+                        "4532.6333"
+                    ],
+                    [
+                        "6",
+                        "High Strength Mix 80lb",
+                        "LBCNC003",
+                        "CONCRETE",
+                        "4530",
+                        "10",
+                        "0.3333",
+                        "4529.6667"
+                    ],
+                    [
+                        "7",
+                        "Miter Saw Stand",
+                        "PTMS000049",
+                        "POWER TOOLS",
+                        "4378",
+                        "17",
+                        "0.5667",
+                        "4377.4333"
+                    ],
+                    [
+                        "8",
+                        "Lightweight Drywall 4x8",
+                        "LBDW000009",
+                        "BUILDING MATERIALS",
+                        "4268",
+                        "11",
+                        "0.3667",
+                        "4267.6333"
+                    ],
+                    [
+                        "9",
+                        "Round Fence Post 8ft",
+                        "LBTRT004",
+                        "LUMBER",
+                        "4151",
+                        "14",
+                        "0.4667",
+                        "4150.5333"
+                    ],
+                    [
+                        "10",
+                        "Lag Bolts 1/2 x 6-inch",
+                        "HWBO000014",
+                        "HARDWARE",
+                        "4147",
+                        "26",
+                        "0.8667",
+                        "4146.1333"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Microfiber Roller Covers",
+                        "Aerosol Primer Spray",
+                        "Sliding Miter Saw 12-inch",
+                        "Semi-Transparent Deck Stain",
+                        "Pipe Thread Sealant Paste",
+                        "High Strength Mix 80lb",
+                        "Miter Saw Stand",
+                        "Lightweight Drywall 4x8",
+                        "Round Fence Post 8ft",
+                        "Lag Bolts 1/2 x 6-inch"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Total Stock Level",
+                            "data": [
+                                5545,
+                                4958,
+                                4922,
+                                4767,
+                                4533,
+                                4530,
+                                4378,
+                                4268,
+                                4151,
+                                4147
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Sales Velocity (units/day)",
+                            "data": [
+                                0.6,
+                                0.8,
+                                0.6,
+                                0.5667,
+                                0.3667,
+                                0.3333,
+                                0.5667,
+                                0.3667,
+                                0.4667,
+                                0.8667
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Gap Score",
+                            "data": [
+                                5544.4,
+                                4957.2,
+                                4921.4,
+                                4766.4333,
+                                4532.6333,
+                                4529.6667,
+                                4377.4333,
+                                4267.6333,
+                                4150.5333,
+                                4146.1333
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "borderColor": "rgba(75,192,192,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Top Products with the Widest Positive Gap: Stock vs Sales Velocity"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "precision": 0
+                            }
+                        },
+                        "y": {
+                            "ticks": {
+                                "autoSkip": false
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "store_name",
+                    "product_name",
+                    "sku",
+                    "store_level_stock_level",
+                    "store_level_units_sold_recent_period",
+                    "store_level_sales_velocity"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Bellevue",
+                        "Microfiber Roller Covers",
+                        "PFRL000022",
+                        "5545",
+                        "18",
+                        "0.6000"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Aerosol Primer Spray",
+                        "PFSP000026",
+                        "4958",
+                        "24",
+                        "0.8000"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Sliding Miter Saw 12-inch",
+                        "PTMS000046",
+                        "4922",
+                        "18",
+                        "0.6000"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Semi-Transparent Deck Stain",
+                        "PFWS000034",
+                        "4767",
+                        "17",
+                        "0.5667"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Pipe Thread Sealant Paste",
+                        "PLTFL005",
+                        "4533",
+                        "11",
+                        "0.3667"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "High Strength Mix 80lb",
+                        "LBCNC003",
+                        "4530",
+                        "10",
+                        "0.3333"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Miter Saw Stand",
+                        "PTMS000049",
+                        "4378",
+                        "17",
+                        "0.5667"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Lightweight Drywall 4x8",
+                        "LBDW000009",
+                        "4268",
+                        "11",
+                        "0.3667"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Round Fence Post 8ft",
+                        "LBTRT004",
+                        "4151",
+                        "14",
+                        "0.4667"
+                    ],
+                    [
+                        "Zava Retail Bellevue",
+                        "Lag Bolts 1/2 x 6-inch",
+                        "HWBO000014",
+                        "4147",
+                        "26",
+                        "0.8667"
+                    ]
+                ]
+            },
+            "id": 4
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Methodology note:</strong> Sales velocity is calculated over the <em>last 30 days ending 2026-12-31</em> (2026-12-01 through 2026-12-31) as <strong>units sold \u00f7 30</strong>. The <strong>gap</strong> is computed as <strong>current on-hand inventory \u2212 sales velocity</strong>. Results are limited to <strong>RLS-filtered, accessible stores</strong> only (the store set available in <code>retail.stores</code>).</p><ul><li><strong>Example:</strong> <em>Combination Wrench Set SAE</em> sold 13 units in 30 days, so velocity = <strong>0.4333/day</strong>; with 1,012 on hand, its gap is <strong>1,011.5667</strong>.</li><li><strong>Scope note:</strong> Inventory is treated as the latest available on-hand snapshot because <code>retail.inventory</code> has no timestamp column.</li></ul>",
+            "id": 5
+        }
+    ]
+}

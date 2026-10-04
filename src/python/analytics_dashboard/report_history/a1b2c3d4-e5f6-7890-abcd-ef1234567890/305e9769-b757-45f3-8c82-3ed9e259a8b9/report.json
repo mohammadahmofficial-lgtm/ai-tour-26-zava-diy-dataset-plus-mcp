@@ -1,0 +1,524 @@
+{
+    "report_id": "305e9769-b757-45f3-8c82-3ed9e259a8b9",
+    "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "timestamp": "2026-09-29 00:18:03",
+    "executed_sql_queries": [
+        "WITH pair_counts AS (\n    SELECT\n        LEAST(oi1.product_id, oi2.product_id) AS product_id_1,\n        GREATEST(oi1.product_id, oi2.product_id) AS product_id_2,\n        COUNT(DISTINCT oi1.order_id) AS pair_order_count\n    FROM retail.order_items oi1\n    JOIN retail.order_items oi2\n      ON oi1.order_id = oi2.order_id\n     AND oi1.product_id < oi2.product_id\n    GROUP BY 1, 2\n),\nproduct_order_counts AS (\n    SELECT\n        product_id,\n        COUNT(DISTINCT order_id) AS product_order_count\n    FROM retail.order_items\n    GROUP BY 1\n),\ntotal_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_order_count\n    FROM retail.order_items\n),\ntop_pairs AS (\n    SELECT *\n    FROM pair_counts\n    ORDER BY pair_order_count DESC, product_id_1, product_id_2\n    LIMIT 10\n)\nSELECT\n    tp.product_id_1,\n    p1.product_name AS product_name_1,\n    tp.product_id_2,\n    p2.product_name AS product_name_2,\n    tp.pair_order_count AS co_purchase_frequency,\n    ROUND(tp.pair_order_count::numeric / NULLIF(t.total_order_count, 0), 6) AS bundle_support,\n    ROUND(tp.pair_order_count::numeric / NULLIF(poc1.product_order_count, 0), 6) AS confidence_1_to_2,\n    ROUND(tp.pair_order_count::numeric / NULLIF(poc2.product_order_count, 0), 6) AS confidence_2_to_1,\n    ROUND((tp.pair_order_count::numeric / NULLIF(t.total_order_count, 0)) /\n          NULLIF((poc1.product_order_count::numeric / NULLIF(t.total_order_count, 0)) *\n                 (poc2.product_order_count::numeric / NULLIF(t.total_order_count, 0)), 0), 6) AS lift,\n    poc1.product_order_count AS product_1_order_count,\n    poc2.product_order_count AS product_2_order_count,\n    t.total_order_count\nFROM top_pairs tp\nJOIN product_order_counts poc1\n  ON tp.product_id_1 = poc1.product_id\nJOIN product_order_counts poc2\n  ON tp.product_id_2 = poc2.product_id\nJOIN total_orders t\n  ON 1 = 1\nLEFT JOIN retail.products p1\n  ON tp.product_id_1 = p1.product_id\nLEFT JOIN retail.products p2\n  ON tp.product_id_2 = p2.product_id\nORDER BY tp.pair_order_count DESC, tp.product_id_1, tp.product_id_2;",
+        "SELECT EXTRACT(YEAR FROM o.order_date) AS year, COUNT(DISTINCT o.order_id) AS distinct_order_count, COUNT(*) AS order_item_rows, SUM(oi.quantity) AS total_quantity, SUM(oi.total_amount) AS total_amount FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id GROUP BY EXTRACT(YEAR FROM o.order_date) ORDER BY year",
+        "SELECT EXTRACT(YEAR FROM o.order_date) AS year, EXTRACT(QUARTER FROM o.order_date) AS quarter, COUNT(DISTINCT o.order_id) AS distinct_order_count, COUNT(*) AS order_item_rows, SUM(oi.quantity) AS total_quantity, SUM(oi.total_amount) AS total_amount FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id GROUP BY EXTRACT(YEAR FROM o.order_date), EXTRACT(QUARTER FROM o.order_date) ORDER BY year, quarter",
+        "SELECT DATE_TRUNC('month', o.order_date) AS month, COUNT(DISTINCT o.order_id) AS distinct_order_count, COUNT(*) AS order_item_rows, SUM(oi.quantity) AS total_quantity, SUM(oi.total_amount) AS total_amount FROM retail.orders o JOIN retail.order_items oi ON o.order_id = oi.order_id WHERE o.order_date >= DATE '2020-01-01' AND o.order_date < DATE '2021-01-01' GROUP BY 1 ORDER BY 1",
+        "WITH order_bundle AS (\n  SELECT\n    o.order_id,\n    o.store_id,\n    s.store_name AS store_location,\n    COUNT(DISTINCT oi.product_id) AS distinct_product_count_in_bundle,\n    SUM(oi.total_amount) AS bundle_revenue\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  JOIN retail.stores s\n    ON o.store_id = s.store_id\n  GROUP BY o.order_id, o.store_id, s.store_name\n  HAVING COUNT(DISTINCT oi.product_id) >= 2\n), location_totals AS (\n  SELECT\n    s.store_name AS store_location,\n    COUNT(DISTINCT o.order_id) AS total_orders_location,\n    SUM(oi.total_amount) AS total_sales_location\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n   AND o.store_id = oi.store_id\n  JOIN retail.stores s\n    ON o.store_id = s.store_id\n  GROUP BY s.store_name\n), bundle_location AS (\n  SELECT\n    ob.store_location,\n    COUNT(*) AS co_purchase_frequency,\n    SUM(ob.bundle_revenue) AS bundle_revenue,\n    AVG(ob.distinct_product_count_in_bundle) AS avg_distinct_product_count_in_bundle\n  FROM order_bundle ob\n  GROUP BY ob.store_location\n)\nSELECT\n  bl.store_location,\n  bl.co_purchase_frequency,\n  lt.total_orders_location,\n  ROUND(bl.co_purchase_frequency::numeric / NULLIF(lt.total_orders_location, 0), 6) AS bundle_support,\n  bl.bundle_revenue,\n  lt.total_sales_location,\n  ROUND(bl.bundle_revenue::numeric / NULLIF(lt.total_sales_location, 0), 6) AS co_purchase_sales_contribution,\n  ROUND(bl.avg_distinct_product_count_in_bundle, 2) AS distinct_product_count_in_bundle\nFROM bundle_location bl\nJOIN location_totals lt\n  ON bl.store_location = lt.store_location\nORDER BY bl.co_purchase_frequency DESC, bl.store_location;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Bundle analysis overview</strong>: Across <em>26,327 orders</em> and <em>$6,259,838.47</em> in revenue, the data shows strong repeat co-purchase behavior that can be used to define bundles as products bought together in the same order with measurable frequency and lift.</p><ul><li><strong>Most frequent co-purchase pair</strong>: <em>Professional Claw Hammer 16oz</em> + <em>Phillips Screwdriver Set</em> appeared together <strong>19 times</strong>, with <strong>0.0722%</strong> bundle support and a very high <strong>18.16 lift</strong>. The reverse confidence is also meaningful at <strong>11.31%</strong> to <strong>11.59%</strong>.</li><li><strong>Other high-value bundle candidates</strong> include <em>Finishing Hammer 13oz</em> + <em>Wood Rasp Set</em> (<strong>18</strong> co-purchases, <strong>14.63 lift</strong>) and <em>Ball Peen Hammer 12oz</em> + <em>Adjustable Wrench 10-inch</em> (<strong>16</strong> co-purchases, <strong>13.99 lift</strong>).</li><li><strong>Common bundle pattern</strong>: many top pairs combine complementary hand tools and measuring tools, such as <em>Precision Screwdriver Kit</em> + <em>Speed Square 7-inch</em> (<strong>16</strong> co-purchases, <strong>10.78 lift</strong>) and <em>Metric Wrench Set</em> + <em>Torque Wrench 1/2-drive</em> (<strong>16</strong> co-purchases, <strong>13.77 lift</strong>).</li><li><strong>Bundle definition</strong>: a practical threshold is a pair with <em>co-purchase frequency</em> above the baseline rate and <em>lift &gt; 1</em>; the strongest candidates here are far above baseline, with lift ranging from <strong>10.78</strong> to <strong>18.16</strong>, indicating real affinity rather than random overlap.</li><li><strong>Store concentration</strong>: <em>Zava Retail Tacoma</em> accounts for <strong>15,741</strong> co-purchases out of <strong>26,327</strong> total orders, with <strong>0.597903</strong> bundle support and <strong>$5,084,736.30</strong> in bundle revenue, representing <strong>81.23%</strong> of total sales at that location.</li><li><strong>Order composition</strong>: the sample orders show bundle-like baskets ranging from <strong>1</strong> to <strong>5</strong> distinct products, with revenue from <strong>$26.57</strong> to <strong>$1,146.79</strong>, suggesting bundles can be embedded in both small and large carts.</li></ul><p><strong>Bottom line</strong>: define a bundle as a pair of products that repeatedly co-occur in the same order, especially when <em>lift is well above 1</em> and co-purchase frequency is at least in the mid-teens. The current data highlights several strong bundle candidates, led by hammer/screwdriver and wrench/measurement combinations.</p>",
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Product 1",
+                    "Product 2",
+                    "Co-purchase Frequency",
+                    "Bundle Support",
+                    "Confidence 1\u21922",
+                    "Confidence 2\u21921",
+                    "Lift",
+                    "Product 1 Orders",
+                    "Product 2 Orders"
+                ],
+                "rows": [
+                    [
+                        "Professional Claw Hammer 16oz",
+                        "Phillips Screwdriver Set",
+                        "19",
+                        "0.000722",
+                        "0.115854",
+                        "0.113095",
+                        "18.155234",
+                        "164",
+                        "168"
+                    ],
+                    [
+                        "Finishing Hammer 13oz",
+                        "Wood Rasp Set",
+                        "18",
+                        "0.000684",
+                        "0.100559",
+                        "0.099448",
+                        "14.626563",
+                        "179",
+                        "181"
+                    ],
+                    [
+                        "Ball Peen Hammer 12oz",
+                        "Adjustable Wrench 10-inch",
+                        "16",
+                        "0.000608",
+                        "0.091429",
+                        "0.093023",
+                        "13.994419",
+                        "175",
+                        "172"
+                    ],
+                    [
+                        "Precision Screwdriver Kit",
+                        "Speed Square 7-inch",
+                        "16",
+                        "0.000608",
+                        "0.085561",
+                        "0.076555",
+                        "10.777883",
+                        "187",
+                        "209"
+                    ],
+                    [
+                        "Metric Wrench Set",
+                        "Torque Wrench 1/2-drive",
+                        "16",
+                        "0.000608",
+                        "0.088398",
+                        "0.094675",
+                        "13.770702",
+                        "181",
+                        "169"
+                    ],
+                    [
+                        "Adjustable Wrench 10-inch",
+                        "Speed Square 7-inch",
+                        "16",
+                        "0.000608",
+                        "0.093023",
+                        "0.076555",
+                        "11.717815",
+                        "172",
+                        "209"
+                    ],
+                    [
+                        "Needle-Nose Pliers 6-inch",
+                        "T-Handle Hex Set",
+                        "16",
+                        "0.000608",
+                        "0.086486",
+                        "0.084211",
+                        "11.983841",
+                        "185",
+                        "190"
+                    ],
+                    [
+                        "Finishing Hammer 13oz",
+                        "T-Handle Hex Set",
+                        "15",
+                        "0.000570",
+                        "0.083799",
+                        "0.078947",
+                        "11.611438",
+                        "179",
+                        "190"
+                    ],
+                    [
+                        "Precision Screwdriver Kit",
+                        "Folding Rule 6-foot",
+                        "15",
+                        "0.000570",
+                        "0.080214",
+                        "0.085227",
+                        "11.998815",
+                        "187",
+                        "176"
+                    ],
+                    [
+                        "Combination Wrench Set SAE",
+                        "Long Arm Hex Set",
+                        "15",
+                        "0.000570",
+                        "0.073892",
+                        "0.090361",
+                        "11.718945",
+                        "203",
+                        "166"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Zava Retail Tacoma"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Co-purchase frequency",
+                            "data": [
+                                15741
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Bundle revenue",
+                            "data": [
+                                5084736.3
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Co-purchase sales contribution (%)",
+                            "data": [
+                                81.23
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "borderColor": "rgba(75,192,192,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Co-purchase Patterns by Store Location"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "ticks": {
+                                "callback": "function(value){return value;}"
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "2020 Q1",
+                        "2020 Q2",
+                        "2020 Q3",
+                        "2020 Q4",
+                        "2021 Q1",
+                        "2021 Q2",
+                        "2021 Q3",
+                        "2021 Q4",
+                        "2022 Q1",
+                        "2022 Q2",
+                        "2022 Q3",
+                        "2022 Q4",
+                        "2023 Q1",
+                        "2023 Q2",
+                        "2023 Q3",
+                        "2023 Q4",
+                        "2024 Q1",
+                        "2024 Q2",
+                        "2024 Q3",
+                        "2024 Q4",
+                        "2025 Q1",
+                        "2025 Q2",
+                        "2025 Q3",
+                        "2025 Q4",
+                        "2026 Q1",
+                        "2026 Q2",
+                        "2026 Q3",
+                        "2026 Q4"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Distinct orders",
+                            "data": [
+                                762,
+                                764,
+                                757,
+                                739,
+                                816,
+                                773,
+                                867,
+                                830,
+                                910,
+                                996,
+                                883,
+                                931,
+                                929,
+                                899,
+                                895,
+                                902,
+                                994,
+                                934,
+                                977,
+                                913,
+                                1047,
+                                1031,
+                                1095,
+                                1039,
+                                1193,
+                                1215,
+                                1104,
+                                1132
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "borderColor": "rgba(54,162,235,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Order items",
+                            "data": [
+                                1551,
+                                1548,
+                                1604,
+                                1542,
+                                1776,
+                                1641,
+                                1850,
+                                1709,
+                                1931,
+                                2137,
+                                1837,
+                                1969,
+                                1943,
+                                1926,
+                                1904,
+                                1841,
+                                2115,
+                                1970,
+                                2066,
+                                1897,
+                                2212,
+                                2183,
+                                2364,
+                                2183,
+                                2508,
+                                2460,
+                                2321,
+                                2388
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "borderColor": "rgba(255,99,132,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Total quantity",
+                            "data": [
+                                2487,
+                                2520,
+                                2592,
+                                2557,
+                                2805,
+                                2647,
+                                2917,
+                                2755,
+                                3112,
+                                3436,
+                                2937,
+                                3231,
+                                3156,
+                                3082,
+                                3132,
+                                3024,
+                                3416,
+                                3228,
+                                3388,
+                                3143,
+                                3534,
+                                3533,
+                                3810,
+                                3487,
+                                4159,
+                                4142,
+                                3744,
+                                3915
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "borderColor": "rgba(75,192,192,1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "Total amount",
+                            "data": [
+                                169345.04,
+                                173704.77,
+                                177173.24,
+                                161682.51,
+                                208245.12,
+                                176679.86,
+                                200380.72,
+                                185588.07,
+                                229075.56,
+                                221800.46,
+                                209214.8,
+                                223818.38,
+                                233900.35,
+                                217297.6,
+                                229128.2,
+                                228834.11,
+                                251335.2,
+                                226766.39,
+                                231523.66,
+                                220291.96,
+                                241745.43,
+                                238903.99,
+                                280919.24,
+                                233059.99,
+                                283257.8,
+                                286774.25,
+                                266982.33,
+                                252409.44
+                            ],
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "borderColor": "rgba(255,159,64,1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Co-Purchase Patterns by Quarter (2020\u20132026)"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Order year and quarter"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Count / Revenue"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Product Category / Type",
+                    "Metric",
+                    "Value"
+                ],
+                "rows": [
+                    [
+                        "Bundle composition",
+                        "Top co-purchased product pair",
+                        "Professional Claw Hammer 16oz + Phillips Screwdriver Set"
+                    ],
+                    [
+                        "Bundle composition",
+                        "Highest co-purchase frequency",
+                        "19"
+                    ],
+                    [
+                        "Bundle composition",
+                        "Highest bundle support",
+                        "0.000722"
+                    ],
+                    [
+                        "Bundle composition",
+                        "Highest lift",
+                        "18.155234"
+                    ],
+                    [
+                        "Bundle composition",
+                        "Most common bundle size (avg distinct products per bundle)",
+                        "2.79"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Hammer + Screwdriver",
+                        "19 co-purchases"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Hammer + Wood Rasp",
+                        "18 co-purchases"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Hammer + Hex Set",
+                        "15 co-purchases"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Wrench + Square",
+                        "16 co-purchases"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Pliers + Hex Set",
+                        "16 co-purchases"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Screwdriver + Rule",
+                        "15 co-purchases"
+                    ],
+                    [
+                        "Product type pairing",
+                        "Wrench + Torque Wrench",
+                        "16 co-purchases"
+                    ],
+                    [
+                        "Store context",
+                        "Location with bundle activity",
+                        "Zava Retail Tacoma"
+                    ],
+                    [
+                        "Store context",
+                        "Bundle revenue",
+                        "5084736.30"
+                    ],
+                    [
+                        "Store context",
+                        "Bundle sales contribution",
+                        "0.812279"
+                    ]
+                ]
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Key merchandising finding:</strong> The business generated <strong>26,327 orders</strong> and <strong>$6,259,838.47</strong> in revenue, with bundle/co-purchase activity contributing <strong>$5,084,736.30</strong> at Zava Retail Tacoma alone \u2014 about <strong>81.2%</strong> of location sales. The average order value is <strong>$237.77</strong> ($6,259,838.47 / 26,327), so even small attachment-rate gains can materially lift revenue.</p><p><strong>What customers buy together most often:</strong> The strongest bundles are highly tool-category specific and show meaningful lift. Top pairs include:</p><ul><li><strong>Professional Claw Hammer 16oz + Phillips Screwdriver Set</strong>: <strong>19</strong> co-purchases, <strong>0.0722%</strong> bundle support, <strong>11.6%</strong> / <strong>11.3%</strong> mutual confidence, <strong>18.16</strong> lift.</li><li><strong>Finishing Hammer 13oz + Wood Rasp Set</strong>: <strong>18</strong> co-purchases, <strong>14.63</strong> lift.</li><li><strong>Ball Peen Hammer 12oz + Adjustable Wrench 10-inch</strong>: <strong>16</strong> co-purchases, <strong>13.99</strong> lift.</li><li><strong>Precision Screwdriver Kit + Folding Rule 6-foot</strong>: <strong>15</strong> co-purchases, <strong>12.00</strong> lift.</li></ul><p><strong>Cross-sell opportunities:</strong> The most frequently ordered products are <strong>Product 23 (209 orders)</strong>, <strong>Product 10 (203)</strong>, <strong>Product 22 (191)</strong>, <strong>Product 27 (191)</strong>, and <strong>Product 30 (190)</strong>. Several of these also appear in high-lift bundles, suggesting strong candidates for checkout add-ons, \u201cfrequently bought together\u201d modules, and aisle-end signage.</p><p><strong>Store-specific bundle opportunity:</strong> Zava Retail Tacoma shows <strong>15,741</strong> co-purchase events across <strong>26,327</strong> orders, with an average of <strong>2.79</strong> distinct products per bundle order. This indicates customers are already receptive to multi-item baskets, so the store should prioritize pre-built kits around the strongest pairings above and place them near high-traffic categories.</p><p><strong>Actionable recommendations:</strong></p><ul><li><strong>Merchandise by task, not just by product:</strong> Group hammer/screwdriver, wrench/hex, and measuring/layout tools into task-based bundles.</li><li><strong>Promote high-lift pairs first:</strong> Use the <strong>18.16</strong> lift hammer/screwdriver bundle and the <strong>14.63</strong> lift hammer/rasp bundle as featured recommendations.</li><li><strong>Build \u201cstarter kits\u201d for Tacoma:</strong> Create 2-item and 3-item bundles around the top co-purchase pairs to raise basket size above the current <strong>$237.77</strong> average.</li><li><strong>Use cross-sell prompts on top sellers:</strong> Attach complementary items to the top 5 products by order count to capture demand where traffic is already highest.</li><li><strong>Seasonal push:</strong> Revenue rose from <strong>$681,905.56</strong> in 2020 to <strong>$1,089,423.82</strong> in 2026, so bundle campaigns should be intensified in peak quarters, especially <strong>Q1 2026 ($283,257.80)</strong> and <strong>Q2 2026 ($286,774.25)</strong>.</li></ul></p>",
+            "id": 6
+        }
+    ]
+}
