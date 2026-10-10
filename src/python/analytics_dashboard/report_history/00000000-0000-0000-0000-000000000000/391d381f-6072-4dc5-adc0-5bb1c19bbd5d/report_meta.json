@@ -1,0 +1,13 @@
+{
+    "report_id": "391d381f-6072-4dc5-adc0-5bb1c19bbd5d",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "highest product sold in april 2023",
+    "title": "April 2023 Top Product",
+    "summary": "Find the product with the highest sales in April 2023. This likely requires filtering sales data to that month and ranking products by total sold.",
+    "timestamp": "2026-10-01 06:32:34",
+    "executed_sql_queries": [
+        "SELECT COUNT(*) AS total_orders, MIN(order_date) AS first_order_date, MAX(order_date) AS last_order_date, COUNT(DISTINCT store_id) AS distinct_stores\nFROM retail.orders\nWHERE order_date BETWEEN DATE '2023-04-01' AND DATE '2023-04-30';",
+        "SELECT store_id, store_name, rls_user_id, is_online FROM retail.stores ORDER BY store_id;",
+        "WITH april_orders AS (\n    SELECT order_id, store_id\n    FROM retail.orders\n    WHERE order_date >= DATE '2023-04-01'\n      AND order_date < DATE '2023-05-01'\n), product_sales AS (\n    SELECT oi.product_id,\n           SUM(oi.quantity) AS total_quantity_sold,\n           SUM(oi.total_amount) AS total_revenue,\n           COUNT(DISTINCT oi.order_id) AS number_of_orders\n    FROM retail.order_items oi\n    JOIN april_orders ao\n      ON oi.order_id = ao.order_id\n     AND oi.store_id = ao.store_id\n    GROUP BY oi.product_id\n)\nSELECT p.product_id,\n       p.product_name,\n       ps.total_quantity_sold,\n       ps.total_revenue,\n       ps.number_of_orders,\n       RANK() OVER (ORDER BY ps.total_revenue DESC, ps.total_quantity_sold DESC, p.product_id) AS sales_rank\nFROM product_sales ps\nJOIN retail.products p\n  ON p.product_id = ps.product_id\nORDER BY sales_rank, p.product_id\nLIMIT 1;"
+    ]
+}

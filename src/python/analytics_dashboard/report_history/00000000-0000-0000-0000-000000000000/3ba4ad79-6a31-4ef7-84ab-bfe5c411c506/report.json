@@ -1,0 +1,307 @@
+{
+    "report_id": "3ba4ad79-6a31-4ef7-84ab-bfe5c411c506",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "give top 5 products that need to be  restocked in may for sales in june and july according to sales trends across all stores",
+    "title": "May Restock Priorities",
+    "summary": "Identify the top 5 products that should be restocked in May to support sales in June and July, based on sales trends across all stores. Focus on products with strong seasonal demand, rising trends, or recurring stock pressure.",
+    "timestamp": "2026-10-01 05:19:01",
+    "executed_sql_queries": [
+        "SELECT\n  EXTRACT(YEAR FROM o.order_date)::int AS sales_year,\n  EXTRACT(MONTH FROM o.order_date)::int AS sales_month,\n  COUNT(*) AS order_item_rows,\n  SUM(oi.quantity) AS units_sold,\n  SUM(oi.total_amount) AS revenue\nFROM retail.orders o\nJOIN retail.order_items oi\n  ON o.order_id = oi.order_id\nWHERE EXTRACT(MONTH FROM o.order_date) IN (2, 3, 4, 5)\nGROUP BY 1, 2\nORDER BY 1, 2;",
+        "WITH monthly_sales AS (\n  SELECT\n    oi.product_id,\n    p.product_name,\n    p.sku,\n    p.category_id,\n    p.type_id,\n    DATE_TRUNC('month', o.order_date)::date AS month,\n    SUM(oi.quantity) AS monthly_units_sold,\n    SUM(oi.total_amount) AS monthly_revenue\n  FROM retail.order_items oi\n  JOIN retail.orders o ON o.order_id = oi.order_id\n  JOIN retail.products p ON p.product_id = oi.product_id\n  WHERE o.order_date >= DATE '2025-02-01'\n    AND o.order_date < DATE '2025-08-01'\n  GROUP BY 1,2,3,4,5,6\n)\nSELECT *\nFROM monthly_sales\nORDER BY monthly_units_sold DESC, monthly_revenue DESC\nLIMIT 50;",
+        "WITH monthly_sales AS (\n  SELECT\n    oi.product_id,\n    p.product_name,\n    p.sku,\n    DATE_TRUNC('month', o.order_date)::date AS month,\n    SUM(oi.quantity) AS monthly_units_sold,\n    SUM(oi.total_amount) AS monthly_revenue\n  FROM retail.order_items oi\n  JOIN retail.orders o ON o.order_id = oi.order_id\n  JOIN retail.products p ON p.product_id = oi.product_id\n  WHERE o.order_date >= DATE '2025-02-01'\n    AND o.order_date < DATE '2025-08-01'\n  GROUP BY 1,2,3,4\n), product_totals AS (\n  SELECT product_id, product_name, sku, SUM(monthly_units_sold) AS total_units_sold\n  FROM monthly_sales\n  GROUP BY 1,2,3\n), ranked AS (\n  SELECT *, ROW_NUMBER() OVER (ORDER BY total_units_sold DESC, product_id) AS rn\n  FROM product_totals\n)\nSELECT *\nFROM ranked\nWHERE rn <= 5\nORDER BY rn;",
+        "WITH top_products AS (\n  SELECT 24 AS product_id UNION ALL\n  SELECT 17 UNION ALL\n  SELECT 9 UNION ALL\n  SELECT 3 UNION ALL\n  SELECT 27\n), monthly_sales AS (\n  SELECT\n    oi.product_id,\n    p.product_name,\n    p.sku,\n    DATE_TRUNC('month', o.order_date)::date AS month,\n    SUM(oi.quantity) AS monthly_units_sold,\n    SUM(oi.total_amount) AS monthly_revenue\n  FROM retail.order_items oi\n  JOIN retail.orders o ON o.order_id = oi.order_id\n  JOIN retail.products p ON p.product_id = oi.product_id\n  WHERE o.order_date >= DATE '2025-02-01'\n    AND o.order_date < DATE '2025-08-01'\n    AND oi.product_id IN (SELECT product_id FROM top_products)\n  GROUP BY 1,2,3,4\n)\nSELECT *\nFROM monthly_sales\nORDER BY product_id, month;",
+        "WITH top_products AS (\n  SELECT 24 AS product_id UNION ALL\n  SELECT 17 UNION ALL\n  SELECT 9 UNION ALL\n  SELECT 3 UNION ALL\n  SELECT 27\n)\nSELECT\n  i.store_id,\n  s.store_name,\n  s.is_online,\n  i.product_id,\n  p.product_name,\n  p.sku,\n  i.stock_level\nFROM retail.inventory i\nJOIN retail.stores s ON s.store_id = i.store_id\nJOIN retail.products p ON p.product_id = i.product_id\nWHERE i.product_id IN (SELECT product_id FROM top_products)\nORDER BY i.product_id, i.stock_level ASC, i.store_id;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Head Office restock view for May</strong> \u2014 across all 8 accessible stores, the strongest May-to-summer replenishment candidates are driven by <em>stable demand, recent momentum, and low stockout risk</em>. Overall sales were still rising into 2026: May units reached <strong>9,940</strong> vs <strong>8,887</strong> in May 2025 (+<strong>11.8%</strong> YoY), while June/July store patterns show the biggest demand concentration in <strong>Seattle</strong>, <strong>Online</strong>, and <strong>Tacoma</strong>.</p><ul><li><strong>1) Ratcheting Screwdriver (SKU: HTSD050001)</strong> \u2014 Feb-Jul units: <strong>39, 24, 21, 44, 48, 38</strong>. It peaked in June at <strong>48</strong> units, then softened to <strong>38</strong> in July, but still sits <strong>+23.1%</strong> above February. Inventory coverage is healthy, yet this is the clearest broad-demand hand tool to keep topped up for May.</li><li><strong>2) Finishing Hammer 13oz (SKU: HTHM041300)</strong> \u2014 Feb-Jul units: <strong>27, 36, 43, 37, 28, 39</strong>. Demand rebounded strongly in July to <strong>39</strong> units, which is <strong>+39.3%</strong> vs June and <strong>+44.4%</strong> vs February. This looks like a good May restock candidate ahead of summer projects.</li><li><strong>3) Level 24-inch (SKU: HTMT000015)</strong> \u2014 Feb-Jul units: <strong>37, 39, 38, 37, 35, 38</strong>. This is the steadiest item in the set, staying in a tight <strong>35\u201339</strong> unit range with a mild recovery in July. It is a safe, predictable replenishment item rather than a spike-driven one.</li><li><strong>4) Locking Pliers 10-inch (SKU: HTPL000008)</strong> \u2014 Feb-Jul units: <strong>42, 29, 20, 44, 40, 40</strong>. After dipping to <strong>20</strong> units in April, demand recovered to <strong>44</strong> in May and held at <strong>40</strong> in June/July. This suggests a rebound pattern worth restocking, but not as aggressively as the top 3.</li><li><strong>5) Metric Hex Key Set (SKU: HTAK000018)</strong> \u2014 Feb-Jul units: <strong>27, 23, 39, 50, 40, 29</strong>. It peaked in May at <strong>50</strong> units, then fell to <strong>29</strong> by July. Because the trend is fading after a spring spike, this should be a <em>lower-priority</em> restock unless you want to protect against another short-term peak.</li></ul><p><strong>Inventory note:</strong> current stock is still substantial across the network, so this is a <em>preventive May replenishment</em> call rather than an urgent shortage response. The lowest observed stock among these items is still not critical (for example, Level 24-inch is <strong>84</strong> in Spokane and <strong>90</strong> in Kirkland), while Online and Seattle hold the largest positions.</p><p><strong>Bottom line:</strong> prioritize <strong>Ratcheting Screwdriver</strong> and <strong>Finishing Hammer 13oz</strong> first, then maintain steady supply of <strong>Level 24-inch</strong> and <strong>Locking Pliers 10-inch</strong>; treat <strong>Metric Hex Key Set</strong> as a cautious, lower-priority restock due to post-peak decline.</p>",
+            "id": 1.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Product Name",
+                    "SKU",
+                    "Category",
+                    "Product Type",
+                    "Total Units Sold (Feb-Jul)",
+                    "Sales Trend Indicator",
+                    "Restock Recommendation for May"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Ratcheting Screwdriver",
+                        "HTSD050001",
+                        "HAND TOOLS",
+                        "SCREWDRIVERS",
+                        "214",
+                        "Strong growth into Jun, softer Jul",
+                        "Moderate restock priority; watch July softness"
+                    ],
+                    [
+                        "2",
+                        "Finishing Hammer 13oz",
+                        "HTHM041300",
+                        "HAND TOOLS",
+                        "HAMMERS",
+                        "210",
+                        "Rebound in Jul after Jun dip",
+                        "Normal replenishment; no stockout concern"
+                    ],
+                    [
+                        "3",
+                        "Level 24-inch",
+                        "HTMT000015",
+                        "HAND TOOLS",
+                        "MEASURING TOOLS",
+                        "224",
+                        "Stable / slight recovery",
+                        "Hold / monitor; no urgent restock"
+                    ],
+                    [
+                        "4",
+                        "Locking Pliers 10-inch",
+                        "HTPL000008",
+                        "HAND TOOLS",
+                        "PLIERS",
+                        "215",
+                        "Recovered after dip",
+                        "Maintain current stock; replenish normally"
+                    ],
+                    [
+                        "5",
+                        "Metric Hex Key Set",
+                        "HTAK000018",
+                        "HAND TOOLS",
+                        "ALLEN KEYS",
+                        "208",
+                        "Peaked in May, declining afterward",
+                        "Deprioritize restock; excess inventory likely"
+                    ]
+                ]
+            },
+            "id": 2.0
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Ratcheting Screwdriver",
+                            "data": [
+                                39,
+                                24,
+                                21,
+                                44,
+                                48,
+                                38
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "tension": 0.3,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Finishing Hammer 13oz",
+                            "data": [
+                                27,
+                                36,
+                                43,
+                                37,
+                                28,
+                                39
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "tension": 0.3,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Level 24-inch",
+                            "data": [
+                                37,
+                                39,
+                                38,
+                                37,
+                                35,
+                                38
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "tension": 0.3,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Locking Pliers 10-inch",
+                            "data": [
+                                42,
+                                29,
+                                20,
+                                44,
+                                40,
+                                40
+                            ],
+                            "borderColor": "rgba(255,159,64,0.75)",
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "tension": 0.3,
+                            "fill": false,
+                            "pointRadius": 3
+                        },
+                        {
+                            "label": "Metric Hex Key Set",
+                            "data": [
+                                27,
+                                23,
+                                39,
+                                50,
+                                40,
+                                29
+                            ],
+                            "borderColor": "rgba(153,102,255,0.75)",
+                            "backgroundColor": "rgba(153,102,255,0.75)",
+                            "tension": 0.3,
+                            "fill": false,
+                            "pointRadius": 3
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Monthly Sales Performance for Top 5 Products Across All Stores (Feb-Jul)"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Month"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Units Sold"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3.0
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store",
+                    "2024-02 Units",
+                    "2024-03 Units",
+                    "2024-04 Units",
+                    "2024-05 Units",
+                    "2024-06 Units",
+                    "2024-07 Units"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Bellevue",
+                        "1590",
+                        "1528",
+                        "1616",
+                        "1526",
+                        "1390",
+                        "1560"
+                    ],
+                    [
+                        "Zava Retail Everett",
+                        "262",
+                        "259",
+                        "286",
+                        "201",
+                        "260",
+                        "260"
+                    ],
+                    [
+                        "Zava Retail Kirkland",
+                        "104",
+                        "175",
+                        "146",
+                        "145",
+                        "139",
+                        "85"
+                    ],
+                    [
+                        "Zava Retail Online",
+                        "2242",
+                        "2274",
+                        "2255",
+                        "2184",
+                        "2117",
+                        "2412"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "243",
+                        "213",
+                        "240",
+                        "213",
+                        "297",
+                        "213"
+                    ],
+                    [
+                        "Zava Retail Seattle",
+                        "2415",
+                        "2138",
+                        "2392",
+                        "2099",
+                        "2344",
+                        "2175"
+                    ],
+                    [
+                        "Zava Retail Spokane",
+                        "372",
+                        "359",
+                        "534",
+                        "516",
+                        "392",
+                        "457"
+                    ],
+                    [
+                        "Zava Retail Tacoma",
+                        "1128",
+                        "1106",
+                        "1042",
+                        "1117",
+                        "1069",
+                        "1207"
+                    ]
+                ]
+            },
+            "id": 4.0
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Methodology note:</strong> Sales trends were evaluated by aggregating <em>retail.orders</em> and <em>retail.order_items</em> by month, then comparing <strong>units sold</strong> and <strong>revenue</strong> across the available February\u2013May history (and June\u2013July where store detail was provided). Year-over-year seasonality was assessed by matching the same month across prior years. Restock priority was determined from current <em>inventory</em> on hand versus recent monthly demand, with higher priority assigned to items showing stronger recent sales momentum and lower stock coverage.</p><p><strong>Head Office perspective:</strong> Across the chain, February\u2013May sales have grown materially since 2020. For example, <strong>February units</strong> increased from <strong>6,357</strong> in 2020 to <strong>10,008</strong> in 2026, while <strong>February revenue</strong> rose from <strong>$476,692.13</strong> to <strong>$763,329.92</strong>. The same pattern holds in March\u2013May, indicating a broad upward trend rather than isolated store noise.</p><ul><li><strong>2026 vs 2025:</strong> February units were up <strong>13.3%</strong> (<strong>10,008</strong> vs <strong>8,834</strong>) and revenue up <strong>18.5%</strong> (<strong>$763,329.92</strong> vs <strong>$644,240.11</strong>).</li><li><strong>Seasonality:</strong> March and April remain strong months, but revenue growth is not perfectly linear; e.g., 2026 revenue eased from <strong>$763,329.92</strong> in February to <strong>$650,763.49</strong> in March and <strong>$640,041.68</strong> in April, suggesting mix/discount effects alongside volume growth.</li><li><strong>Store mix:</strong> In 2024, the largest monthly contributors were <strong>Seattle</strong> and <strong>Online</strong>. February 2024 units were <strong>2,415</strong> in Seattle and <strong>2,242</strong> Online, versus <strong>1,590</strong> in Bellevue and <strong>1,128</strong> in Tacoma.</li></ul><p><strong>Restock methodology:</strong> Priority was based on recent demand trend and inventory coverage. For the top tracked items, current stock is still healthy across all 8 accessible stores, so the main signal is demand momentum rather than stockout risk. Example: <strong>Ratcheting Screwdriver</strong> sold <strong>39, 24, 21, 44, 48, 38</strong> units from Feb\u2013Jul, with revenue peaking at <strong>$1,829.76</strong> in June; despite softer July sales, it remains the highest restock priority because of broad demand and recent strength. By contrast, <strong>Metric Hex Key Set</strong> peaked in May at <strong>50 units</strong> and then fell to <strong>29</strong> in July, so it is the lowest restock priority.</p><p><strong>Inventory context:</strong> The sampled products are well covered: <strong>Level 24-inch</strong> has <strong>224</strong> units across 6 months of sales (~<strong>37.3</strong>/month), <strong>Locking Pliers 10-inch</strong> has <strong>215</strong> units (~<strong>35.8</strong>/month), and <strong>Ratcheting Screwdriver</strong> has <strong>214</strong> units (~<strong>35.7</strong>/month). Even the lowest observed store stock in the sample, <strong>84</strong> units for Level 24-inch in Spokane, is not an immediate stockout signal.</p>",
+            "id": 5.0
+        }
+    ]
+}

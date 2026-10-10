@@ -1,0 +1,8 @@
+{
+    "report_id": "c466149e-e4e6-4c25-adfb-b89e2504aeee",
+    "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "prompt": "Analyze frequently purchased product combinations and identify common bundles in the sales data. Compare how these co-purchase patterns differ across store locations and seasonal time periods.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "timestamp": "2026-09-28 23:46:53"
+}

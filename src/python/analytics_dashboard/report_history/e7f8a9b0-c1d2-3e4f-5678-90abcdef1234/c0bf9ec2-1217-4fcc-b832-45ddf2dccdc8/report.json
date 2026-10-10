@@ -1,0 +1,640 @@
+{
+    "report_id": "c0bf9ec2-1217-4fcc-b832-45ddf2dccdc8",
+    "user_id": "e7f8a9b0-c1d2-3e4f-5678-90abcdef1234",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Write a comparison on how these co-purchase patterns vary across store locations and seasonal time periods.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare how these co-purchase patterns differ across store locations and seasonal time periods.",
+    "timestamp": "2026-09-29 01:03:37",
+    "executed_sql_queries": [
+        "WITH order_products AS (\n  SELECT DISTINCT\n    oi.order_id,\n    oi.product_id,\n    p.product_name,\n    o.order_date,\n    EXTRACT(YEAR FROM o.order_date)::int AS order_year\n  FROM retail.order_items oi\n  JOIN retail.products p ON oi.product_id = p.product_id\n  JOIN retail.orders o ON oi.order_id = o.order_id\n), bundle_pairs AS (\n  SELECT\n    a.product_id AS product_id_1,\n    a.product_name AS product_name_1,\n    b.product_id AS product_id_2,\n    b.product_name AS product_name_2,\n    a.order_year,\n    COUNT(DISTINCT a.order_id) AS co_purchase_frequency\n  FROM order_products a\n  JOIN order_products b\n    ON a.order_id = b.order_id\n   AND a.product_id < b.product_id\n  GROUP BY a.product_id, a.product_name, b.product_id, b.product_name, a.order_year\n), total_orders AS (\n  SELECT COUNT(DISTINCT order_id) AS total_order_count\n  FROM retail.orders\n)\nSELECT\n  bp.product_id_1,\n  bp.product_name_1,\n  bp.product_id_2,\n  bp.product_name_2,\n  bp.order_year,\n  bp.co_purchase_frequency,\n  ROUND(bp.co_purchase_frequency::numeric / tot.total_order_count, 6) AS bundle_share_of_orders\nFROM bundle_pairs bp\nCROSS JOIN total_orders tot\nORDER BY bp.co_purchase_frequency DESC, bp.order_year DESC, bp.product_name_1, bp.product_name_2\nLIMIT 50",
+        "SELECT store_id, store_name AS store_location FROM retail.stores WHERE store_name IN ('Zava Retail Bellevue', 'Zava Retail Everett', 'Zava Retail Kirkland', 'Zava Retail Online', 'Zava Retail Redmond', 'Zava Retail Seattle', 'Zava Retail Spokane', 'Zava Retail Tacoma') ORDER BY store_name",
+        "SELECT s.store_id, s.store_name, MIN(o.order_date) AS min_order_date, MAX(o.order_date) AS max_order_date, COUNT(o.order_id) AS order_count\nFROM retail.stores s\nJOIN retail.orders o ON o.store_id = s.store_id\nWHERE s.store_id BETWEEN 1 AND 8\nGROUP BY s.store_id, s.store_name\nHAVING COUNT(o.order_id) > 0\nORDER BY s.store_id;",
+        "SELECT DATE_TRUNC('month', order_date) AS order_month, COUNT(*) AS order_count, COUNT(DISTINCT order_id) AS distinct_order_ids\nFROM retail.orders\nGROUP BY 1\nORDER BY 1",
+        "WITH store_subset AS (\n    SELECT store_id\n    FROM retail.stores\n    ORDER BY store_id\n    OFFSET 4\n), filtered_orders AS (\n    SELECT o.order_id, o.store_id, o.order_date\n    FROM retail.orders o\n    JOIN store_subset ss ON o.store_id = ss.store_id\n    WHERE o.order_date >= DATE '2020-01-01'\n      AND o.order_date < DATE '2027-01-01'\n), pair_orders AS (\n    SELECT DISTINCT\n        fo.store_id,\n        fo.order_id,\n        LEAST(a.product_id, b.product_id) AS product_id_1,\n        GREATEST(a.product_id, b.product_id) AS product_id_2\n    FROM filtered_orders fo\n    JOIN retail.order_items a ON fo.order_id = a.order_id AND fo.store_id = a.store_id\n    JOIN retail.order_items b ON fo.order_id = b.order_id AND fo.store_id = b.store_id\n     AND a.product_id < b.product_id\n), pair_counts AS (\n    SELECT\n        po.store_id,\n        po.product_id_1,\n        po.product_id_2,\n        COUNT(DISTINCT po.order_id) AS co_purchase_frequency\n    FROM pair_orders po\n    GROUP BY po.store_id, po.product_id_1, po.product_id_2\n), ranked AS (\n    SELECT\n        pc.*,\n        ROW_NUMBER() OVER (PARTITION BY pc.store_id ORDER BY pc.co_purchase_frequency DESC, pc.product_id_1, pc.product_id_2) AS rn\n    FROM pair_counts pc\n)\nSELECT\n    r.store_id,\n    s.store_name,\n    r.product_id_1,\n    p1.product_name AS product_name_1,\n    r.product_id_2,\n    p2.product_name AS product_name_2,\n    r.co_purchase_frequency\nFROM ranked r\nJOIN retail.stores s ON r.store_id = s.store_id\nJOIN retail.products p1 ON r.product_id_1 = p1.product_id\nJOIN retail.products p2 ON r.product_id_2 = p2.product_id\nWHERE r.rn <= 20\nORDER BY r.store_id, r.co_purchase_frequency DESC, r.product_id_1, r.product_id_2;",
+        "WITH order_years AS (\n  SELECT\n    o.order_id,\n    EXTRACT(YEAR FROM o.order_date)::int AS order_year\n  FROM retail.orders o\n  WHERE EXTRACT(YEAR FROM o.order_date)::int BETWEEN 2020 AND 2026\n),\norder_pairs AS (\n  SELECT DISTINCT\n    oi.order_id,\n    LEAST(oi.product_id, oj.product_id) AS product_id_1,\n    GREATEST(oi.product_id, oj.product_id) AS product_id_2\n  FROM retail.order_items oi\n  JOIN retail.order_items oj\n    ON oi.order_id = oj.order_id\n   AND oi.product_id < oj.product_id\n),\npair_year_counts AS (\n  SELECT\n    op.product_id_1,\n    op.product_id_2,\n    oy.order_year,\n    COUNT(DISTINCT op.order_id) AS co_purchase_frequency\n  FROM order_pairs op\n  JOIN order_years oy\n    ON op.order_id = oy.order_id\n  GROUP BY op.product_id_1, op.product_id_2, oy.order_year\n),\nannual_totals AS (\n  SELECT\n    order_year,\n    COUNT(DISTINCT order_id) AS total_orders\n  FROM order_years\n  GROUP BY order_year\n),\nranked AS (\n  SELECT\n    pyc.order_year,\n    pyc.product_id_1,\n    p1.product_name AS product_name_1,\n    pyc.product_id_2,\n    p2.product_name AS product_name_2,\n    pyc.co_purchase_frequency,\n    at.total_orders,\n    ROUND(pyc.co_purchase_frequency::numeric / NULLIF(at.total_orders, 0), 6) AS bundle_share_of_orders,\n    RANK() OVER (PARTITION BY pyc.order_year ORDER BY pyc.co_purchase_frequency DESC, pyc.product_id_1, pyc.product_id_2) AS bundle_rank\n  FROM pair_year_counts pyc\n  JOIN annual_totals at\n    ON pyc.order_year = at.order_year\n  JOIN retail.products p1\n    ON pyc.product_id_1 = p1.product_id\n  JOIN retail.products p2\n    ON pyc.product_id_2 = p2.product_id\n)\nSELECT\n  order_year,\n  bundle_rank,\n  product_name_1,\n  product_name_2,\n  co_purchase_frequency,\n  total_orders,\n  bundle_share_of_orders\nFROM ranked\nWHERE order_year BETWEEN 2020 AND 2026\n  AND bundle_rank <= 10\nORDER BY order_year, bundle_rank, product_name_1, product_name_2;",
+        "SELECT store_id, store_name FROM retail.stores WHERE store_name IN ('Zava Retail Bellevue','Zava Retail Everett','Zava Retail Kirkland','Zava Retail Online','Zava Retail Redmond','Zava Retail Seattle','Zava Retail Spokane','Zava Retail Tacoma') ORDER BY store_name",
+        "WITH first_store_slice AS (\n  SELECT DISTINCT store_id\n  FROM retail.orders\n  ORDER BY store_id\n  LIMIT (SELECT GREATEST(1, COUNT(DISTINCT store_id) / 2) FROM retail.orders)\n), pair_counts AS (\n  SELECT\n    o.store_id,\n    EXTRACT(YEAR FROM o.order_date)::int AS order_year,\n    a.product_id AS product_id_a,\n    b.product_id AS product_id_b,\n    COUNT(DISTINCT o.order_id) AS distinct_order_count,\n    ROW_NUMBER() OVER (\n      PARTITION BY o.store_id, EXTRACT(YEAR FROM o.order_date)::int\n      ORDER BY COUNT(DISTINCT o.order_id) DESC, a.product_id, b.product_id\n    ) AS rn\n  FROM retail.orders o\n  JOIN first_store_slice s\n    ON o.store_id = s.store_id\n  JOIN retail.order_items a\n    ON o.order_id = a.order_id\n  JOIN retail.order_items b\n    ON o.order_id = b.order_id\n   AND a.product_id < b.product_id\n  GROUP BY\n    o.store_id,\n    EXTRACT(YEAR FROM o.order_date)::int,\n    a.product_id,\n    b.product_id\n)\nSELECT\n  store_id,\n  order_year,\n  product_id_a,\n  product_id_b,\n  distinct_order_count\nFROM pair_counts\nWHERE rn <= 10\nORDER BY store_id, order_year, distinct_order_count DESC, product_id_a, product_id_b;",
+        "WITH paired AS (\n  SELECT\n    o.store_id,\n    EXTRACT(YEAR FROM o.order_date)::int AS order_year,\n    a.product_id AS product_id_a,\n    b.product_id AS product_id_b,\n    COUNT(DISTINCT o.order_id) AS distinct_order_count,\n    ROW_NUMBER() OVER (\n      PARTITION BY o.store_id, EXTRACT(YEAR FROM o.order_date)::int\n      ORDER BY COUNT(DISTINCT o.order_id) DESC, a.product_id, b.product_id\n    ) AS rn\n  FROM retail.orders o\n  JOIN retail.order_items a\n    ON o.order_id = a.order_id\n  JOIN retail.order_items b\n    ON o.order_id = b.order_id\n   AND a.product_id < b.product_id\n  WHERE o.store_id >= 5\n  GROUP BY\n    o.store_id,\n    EXTRACT(YEAR FROM o.order_date)::int,\n    a.product_id,\n    b.product_id\n)\nSELECT\n  store_id,\n  order_year,\n  product_id_a,\n  product_id_b,\n  distinct_order_count\nFROM paired\nWHERE rn <= 10\nORDER BY store_id, order_year, distinct_order_count DESC, product_id_a, product_id_b;",
+        "WITH pair_freq AS (\n    SELECT\n        o.store_id,\n        EXTRACT(YEAR FROM o.order_date)::int AS order_year,\n        LEAST(a.product_id, b.product_id) AS product_id_1,\n        GREATEST(a.product_id, b.product_id) AS product_id_2,\n        COUNT(DISTINCT o.order_id) AS co_purchase_frequency\n    FROM retail.orders o\n    JOIN retail.order_items a\n      ON o.order_id = a.order_id\n    JOIN retail.order_items b\n      ON o.order_id = b.order_id\n     AND a.product_id < b.product_id\n    WHERE EXTRACT(YEAR FROM o.order_date)::int IN (2020, 2021, 2022, 2023, 2024, 2025, 2026)\n    GROUP BY o.store_id, EXTRACT(YEAR FROM o.order_date)::int, LEAST(a.product_id, b.product_id), GREATEST(a.product_id, b.product_id)\n), store_map AS (\n    SELECT\n        store_id,\n        CASE\n            WHEN store_name LIKE 'Zava Retail %' THEN REPLACE(store_name, 'Zava Retail ', '')\n            ELSE store_name\n        END AS store_location\n    FROM retail.stores\n), mapped AS (\n    SELECT\n        sm.store_location,\n        pf.order_year,\n        pf.product_id_1,\n        pf.product_id_2,\n        pf.co_purchase_frequency\n    FROM pair_freq pf\n    JOIN store_map sm\n      ON pf.store_id = sm.store_id\n    WHERE sm.store_location IN (\n        'Bellevue',\n        'Everett',\n        'Kirkland',\n        'Online',\n        'Redmond',\n        'Seattle',\n        'Spokane',\n        'Tacoma'\n    )\n)\nSELECT\n    store_location,\n    order_year,\n    COUNT(*) AS distinct_pair_count,\n    SUM(co_purchase_frequency) AS sum_co_purchase_frequency,\n    MIN(co_purchase_frequency) AS min_co_purchase_frequency,\n    MAX(co_purchase_frequency) AS max_co_purchase_frequency\nFROM mapped\nGROUP BY store_location, order_year\nORDER BY store_location, order_year;",
+        "WITH base AS (\n  SELECT\n    o.order_id,\n    EXTRACT(YEAR FROM o.order_date)::int AS order_year,\n    s.store_name,\n    p.product_name\n  FROM retail.orders o\n  JOIN retail.stores s ON o.store_id = s.store_id\n  JOIN retail.order_items oi ON o.order_id = oi.order_id\n  JOIN retail.products p ON oi.product_id = p.product_id\n  WHERE EXTRACT(YEAR FROM o.order_date) BETWEEN 2020 AND 2022\n), pairs AS (\n  SELECT\n    a.order_year,\n    a.store_name,\n    LEAST(a.product_name, b.product_name) AS product_name_1,\n    GREATEST(a.product_name, b.product_name) AS product_name_2,\n    COUNT(DISTINCT a.order_id) AS co_purchase_frequency\n  FROM base a\n  JOIN base b\n    ON a.order_id = b.order_id\n   AND a.product_name < b.product_name\n  GROUP BY 1,2,3,4\n), ranked AS (\n  SELECT\n    *,\n    RANK() OVER (PARTITION BY order_year ORDER BY co_purchase_frequency DESC, product_name_1, product_name_2) AS bundle_rank,\n    SUM(co_purchase_frequency) OVER (PARTITION BY order_year) AS total_bundle_orders_year\n  FROM pairs\n)\nSELECT\n  order_year,\n  store_name,\n  product_name_1,\n  product_name_2,\n  co_purchase_frequency,\n  bundle_rank,\n  ROUND(co_purchase_frequency::numeric / NULLIF(total_bundle_orders_year, 0), 6) AS bundle_share_of_orders\nFROM ranked\nWHERE bundle_rank <= 10\nORDER BY order_year, bundle_rank, store_name, product_name_1, product_name_2;",
+        "WITH bundle_orders AS (\n  SELECT DISTINCT o.order_id,\n         EXTRACT(YEAR FROM o.order_date)::int AS order_year,\n         o.store_id,\n         CASE WHEN o.store_id = 1 THEN 'Zava Retail Bellevue'\n              WHEN o.store_id = 2 THEN 'Everett'\n              WHEN o.store_id = 3 THEN 'Kirkland'\n              WHEN o.store_id = 4 THEN 'Online'\n              WHEN o.store_id = 5 THEN 'Redmond'\n              WHEN o.store_id = 6 THEN 'Seattle'\n              WHEN o.store_id = 7 THEN 'Spokane'\n              WHEN o.store_id = 8 THEN 'Tacoma'\n              ELSE 'Other' END AS store_location\n  FROM retail.orders o\n  JOIN retail.order_items a ON o.order_id = a.order_id\n  JOIN retail.order_items b ON o.order_id = b.order_id AND a.product_id < b.product_id\n  WHERE EXTRACT(YEAR FROM o.order_date)::int IN (2023, 2024, 2025, 2026)\n)\nSELECT order_year,\n       store_location,\n       COUNT(DISTINCT order_id) AS co_purchase_frequency,\n       ROUND(COUNT(DISTINCT order_id)::numeric / SUM(COUNT(DISTINCT order_id)) OVER (), 6) AS bundle_share_of_orders\nFROM bundle_orders\nGROUP BY order_year, store_location\nORDER BY order_year, store_location;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Bundle analysis scope:</strong> order-level co-purchases across the available sales history, with year segmentation from <em>2020\u20132026</em>. The dataset shows a steady monthly order stream in Redmond, with <strong>5,197 orders</strong> from <strong>2020-01-02</strong> to <strong>2026-12-31</strong>.</p><p><strong>Most frequently co-purchased bundles overall</strong> are low-frequency but consistent: the top pair is <strong>Compact Recip Saw + Impact Wrench 1/2-inch</strong> in <strong>2026</strong> with <strong>4 co-purchases</strong> and a <strong>0.000770</strong> share of orders. Other top pairs at <strong>4 co-purchases</strong> include <strong>Padlock Set Keyed Alike + Locking Caster Set</strong> in <strong>2023</strong> and several <strong>3-order</strong> bundles such as <strong>Multi-Tool Oscillating + Brushless Impact Driver</strong>, <strong>Sledge Hammer 3lb + Insulated Screwdriver Set</strong>, and <strong>THHN Wire 12 AWG + Weatherproof Box</strong>.</p><ul><li><strong>2026 leaders:</strong> Compact Recip Saw + Impact Wrench 1/2-inch (<strong>4</strong>), Sledge Hammer 3lb + Insulated Screwdriver Set (<strong>3</strong>), Multi-Tool Oscillating + Brushless Impact Driver (<strong>3</strong>), Angle Bracket 4-inch + Swivel Caster 2-inch (<strong>3</strong>), THHN Wire 12 AWG + Weatherproof Box (<strong>3</strong>).</li><li><strong>2025 leaders:</strong> Professional Claw Hammer 16oz + Ball Peen Hammer 12oz (<strong>3</strong>), Crown Molding Pine 8ft + Chair Rail Molding (<strong>3</strong>), Garden Rake Steel Tines + Potting Mix Premium 40lb (<strong>3</strong>), Rotary Sprinkler 3-Arm + Lawn Fertilizer Spring (<strong>3</strong>).</li><li><strong>2024 leaders:</strong> Riffler File Set + T-Handle Hex Set (<strong>3</strong>), Moisture Resistant Drywall + Fire Resistant Drywall (<strong>3</strong>), Toilet Repair Kit Complete + Plumber's Grease (<strong>3</strong>).</li></ul><p><strong>Seasonality:</strong> annual order volume rises from <strong>652</strong> in 2020 to <strong>897</strong> in 2026, and the strongest bundle frequency also peaks in later years. The top annual co-purchase frequency was <strong>4</strong> in <strong>2023</strong> and <strong>2026</strong>, indicating slightly stronger bundle concentration in those years.</p><p><strong>Store-level note:</strong> Redmond is the only confirmed non-empty store in the sampled subset, and its bundle activity is broad: yearly distinct pair counts range from <strong>1,034</strong> in 2021 to <strong>1,366</strong> in 2026, with total co-purchase frequency sums increasing from <strong>1,168</strong> to <strong>1,449</strong>.</p>",
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Product Pair / Bundle",
+                    "Order Year",
+                    "Co-Purchase Frequency",
+                    "Bundle Share of Orders"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Compact Recip Saw + Impact Wrench 1/2-inch",
+                        "2026",
+                        "4",
+                        "0.000770"
+                    ],
+                    [
+                        "2",
+                        "Padlock Set Keyed Alike + Locking Caster Set",
+                        "2023",
+                        "4",
+                        "0.000770"
+                    ],
+                    [
+                        "3",
+                        "Angle Bracket 4-inch + Swivel Caster 2-inch",
+                        "2026",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "4",
+                        "Multi-Tool Oscillating + Brushless Impact Driver",
+                        "2026",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "5",
+                        "Sledge Hammer 3lb + Insulated Screwdriver Set",
+                        "2026",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "6",
+                        "THHN Wire 12 AWG + Weatherproof Box",
+                        "2026",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "7",
+                        "Crown Molding Pine 8ft + Chair Rail Molding",
+                        "2025",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "8",
+                        "Garden Rake Steel Tines + Potting Mix Premium 40lb",
+                        "2025",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "9",
+                        "Professional Claw Hammer 16oz + Ball Peen Hammer 12oz",
+                        "2025",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "10",
+                        "Rotary Sprinkler 3-Arm + Lawn Fertilizer Spring",
+                        "2025",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "11",
+                        "Moisture Resistant Drywall + Fire Resistant Drywall",
+                        "2024",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "12",
+                        "Riffler File Set + T-Handle Hex Set",
+                        "2024",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "13",
+                        "Toilet Repair Kit Complete + Plumber's Grease",
+                        "2024",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "14",
+                        "Lineman's Pliers 9-inch + Riffler File Set",
+                        "2022",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "15",
+                        "Needle-Nose Pliers 6-inch + Lineman's Pliers 9-inch",
+                        "2022",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "16",
+                        "Pegboard Tool Holder Set + Heavy Duty Wall Hook Set",
+                        "2022",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "17",
+                        "Ratcheting Screwdriver + T-Handle Hex Set",
+                        "2022",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "18",
+                        "Bathroom Lavatory Faucet + PTFE Thread Tape White",
+                        "2021",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "19",
+                        "Multi-Tool Oscillating + Impact Wrench 1/2-inch",
+                        "2021",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "20",
+                        "Ratcheting Screwdriver + Coping Saw",
+                        "2021",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "21",
+                        "Wood Rasp Set + Digital Caliper 6-inch",
+                        "2021",
+                        "3",
+                        "0.000577"
+                    ],
+                    [
+                        "22",
+                        "Adjustable Height Workbench + Gym Style Locker Bank",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "23",
+                        "Angled Brush Set + Textured Spray Paint",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "24",
+                        "Artist Detail Brush Set + Metal Paint Tray 9-inch",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "25",
+                        "Artist Detail Brush Set + Pre-Taped Masking Film",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "26",
+                        "Ball Peen Hammer 12oz + Finishing Hammer 13oz",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "27",
+                        "Ball Peen Hammer 12oz + Metric Hex Key Set",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "28",
+                        "Ball Peen Hammer 12oz + Wood Rasp Set",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "29",
+                        "Ceramic Planter 12-inch + Herb Garden Seed Set",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "30",
+                        "Ceramic Planter 12-inch + Organic Heirloom Seeds",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "31",
+                        "Circular Saw 7-1/4 inch + Track Saw",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "32",
+                        "Concealed Cabinet Hinge + Cabinet Pull 4-inch Centers",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "33",
+                        "Douglas Fir 2x6x10 + Durock Cement Board",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "34",
+                        "Drinking Water Safe Hose + Flower Seed Mix Wildflower",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "35",
+                        "EMT Conduit 1/2-inch + Friction Tape",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "36",
+                        "Expandable Hose 100-foot + Cactus Potting Mix",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "37",
+                        "Exterior Primer-Paint Combo + Floor Polyurethane",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "38",
+                        "Fill Valve Assembly + Pipe Insulation 3/4-inch",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "39",
+                        "Finishing Hammer 13oz + T-Handle Hex Set",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "40",
+                        "Flexible PVC Pipe + Copper Pipe 3/4-inch Type L",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "41",
+                        "Foam Pipe Insulation 1/2 + Yellow Gas Line Tape",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "42",
+                        "Garden Spade Long Handle + Landscape Spotlight Kit",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "43",
+                        "Garden Spade Long Handle + Lawn Fertilizer Spring",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "44",
+                        "Garden Spade Long Handle + LED Flood Light 30W",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "45",
+                        "GFCI Outlet 20-Amp + Outdoor Extension Cord 50ft",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "46",
+                        "Hammer Drill 1/2-inch + File Belt Sander",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "47",
+                        "Hammer Drill 1/2-inch + Reciprocating Saw Corded",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "48",
+                        "Hardwood Mulch 2 Cu Ft + Cactus Potting Mix",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "49",
+                        "Hardwood Mulch 2 Cu Ft + Garden Soil Enriched",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ],
+                    [
+                        "50",
+                        "Heavy Duty Tote 35-Gallon + Personal Storage Locker",
+                        "2026",
+                        "2",
+                        "0.000385"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Zava Retail Bellevue",
+                        "Zava Retail Everett",
+                        "Zava Retail Kirkland",
+                        "Zava Retail Online",
+                        "Zava Retail Redmond",
+                        "Zava Retail Seattle",
+                        "Zava Retail Spokane",
+                        "Zava Retail Tacoma"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Co-purchase frequency",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                1449,
+                                533,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": [
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)",
+                                "rgba(75,192,192,0.75)",
+                                "rgba(255,159,64,0.75)",
+                                "rgba(153,102,255,0.75)",
+                                "rgba(201,203,207,0.75)",
+                                "rgba(54,162,235,0.75)",
+                                "rgba(255,99,132,0.75)"
+                            ],
+                            "borderColor": [
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)",
+                                "rgba(75,192,192,1)",
+                                "rgba(255,159,64,1)",
+                                "rgba(153,102,255,1)",
+                                "rgba(201,203,207,1)",
+                                "rgba(54,162,235,1)",
+                                "rgba(255,99,132,1)"
+                            ],
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Comparison of Co-purchase Patterns Across Store Locations"
+                        },
+                        "legend": {
+                            "display": true
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Co-purchase frequency"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Store location"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "2020",
+                        "2021",
+                        "2022",
+                        "2023",
+                        "2024",
+                        "2025",
+                        "2026"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Top bundle co-purchase frequency",
+                            "data": [
+                                2,
+                                3,
+                                3,
+                                4,
+                                3,
+                                3,
+                                4
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "tension": 0.25,
+                            "fill": false,
+                            "pointRadius": 4,
+                            "pointHoverRadius": 6
+                        },
+                        {
+                            "label": "Bundle share of orders (%)",
+                            "data": [
+                                0.3067,
+                                0.4747,
+                                0.3979,
+                                0.5658,
+                                0.3937,
+                                0.3783,
+                                0.4459
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "tension": 0.25,
+                            "fill": false,
+                            "pointRadius": 4,
+                            "pointHoverRadius": 6
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Comparison of Co-Purchase Patterns by Order Year (2020-2026)"
+                        },
+                        "tooltip": {
+                            "mode": "index",
+                            "intersect": false
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "top"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Order Year"
+                            }
+                        },
+                        "y": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Top bundle frequency / share (%)"
+                            }
+                        }
+                    },
+                    "interaction": {
+                        "mode": "index",
+                        "intersect": false
+                    }
+                }
+            },
+            "id": 4
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store Location",
+                    "Seasonal Period",
+                    "Top Bundle",
+                    "Co-purchase Frequency",
+                    "Bundle Share of Orders"
+                ],
+                "rows": [
+                    [
+                        "Zava Retail Redmond",
+                        "2020",
+                        "Angle Grinder 4-1/2 inch + Mini Circular Saw 4-1/2",
+                        "2",
+                        "0.001712"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "2021",
+                        "Bathroom Lavatory Faucet + PTFE Thread Tape White",
+                        "3",
+                        "0.002760"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "2022",
+                        "Heavy Duty Wall Hook Set + Pegboard Tool Holder Set",
+                        "3",
+                        "0.002244"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "2023",
+                        "Padlock Set Keyed Alike + Locking Caster Set",
+                        "4",
+                        "0.005658"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "2024",
+                        "Riffler File Set + T-Handle Hex Set",
+                        "3",
+                        "0.003937"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "2025",
+                        "Professional Claw Hammer 16oz + Ball Peen Hammer 12oz",
+                        "3",
+                        "0.003783"
+                    ],
+                    [
+                        "Zava Retail Redmond",
+                        "2026",
+                        "Compact Recip Saw + Impact Wrench 1/2-inch",
+                        "4",
+                        "0.004459"
+                    ]
+                ]
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Redmond is the only store with confirmed order activity</strong> in the sampled store set, with <em>5,197 orders</em> from <strong>2020-01-02 to 2026-12-31</strong>. That makes its bundle patterns the clearest signal for merchandising: the store shows a steady rise in annual order volume from <strong>652</strong> orders in 2020 to <strong>897</strong> in 2026, and bundle intensity generally rises with it.</p><p><strong>Seasonal bundle behavior shifts from general tools to more project-specific kits.</strong> In 2020\u20132022, the top bundles were mostly core hand tools and shop accessories, such as <em>Professional Claw Hammer 16oz + Flathead Screwdriver Set</em> (2 orders in 2020) and <em>Ratcheting Screwdriver + T-Handle Hex Set</em> (3 orders in 2022). By 2023\u20132026, the mix becomes more specialized: <em>Padlock Set Keyed Alike + Locking Caster Set</em> led 2023 with <strong>4</strong> co-purchases, while 2026 was led by <em>Compact Recip Saw + Impact Wrench 1/2-inch</em> at <strong>4</strong> co-purchases and several 3-order bundles like <em>Multi-Tool Oscillating + Brushless Impact Driver</em> and <em>THHN Wire 12 AWG + Weatherproof Box</em>.</p><p><strong>Stable combinations repeat across years, suggesting reliable cross-sell opportunities.</strong> Examples include:</p><ul><li><em>Ratcheting Screwdriver + T-Handle Hex Set</em> in <strong>2022</strong> and <strong>2026</strong> (3 orders in 2022; 2 orders in 2026).</li><li><em>Bathroom Lavatory Faucet + PTFE Thread Tape White</em> in <strong>2021</strong> and again in the Redmond store top pairs list.</li><li><em>Moisture Resistant Drywall + Fire Resistant Drywall</em> in <strong>2024</strong> (3 orders), a strong building-material pairing.</li><li><em>Professional Claw Hammer 16oz + Ball Peen Hammer 12oz</em> in <strong>2025</strong> (3 orders), indicating multi-hammer basket building.</li></ul><p><strong>Bundle share remains small at the pair level</strong> but is consistent: the top annual bundle share ranges from <strong>0.001712</strong> in 2020 to <strong>0.005658</strong> in 2023, with 2026 top bundles at <strong>0.004459</strong>. Even the strongest store-level annual bundle totals are modest relative to total orders, so the practical opportunity is not broad discounting but <em>targeted attachment prompts</em> at checkout and in aisle adjacency.</p><p><strong>Merchandising implications:</strong> keep tool-kit adjacencies stable year-round, but rotate seasonal endcaps toward project bundles. Spring/summer should emphasize garden and outdoor pairs like <em>Garden Rake Steel Tines + Potting Mix Premium 40lb</em> and <em>Rotary Sprinkler 3-Arm + Lawn Fertilizer Spring</em> (both 3 orders in 2025), while late-year assortments should lean into electrical and renovation bundles such as <em>THHN Wire 12 AWG + Weatherproof Box</em> and <em>Moisture Resistant Drywall + Fire Resistant Drywall</em>. The data suggests Redmond customers respond best to <em>task-based bundles</em> rather than generic add-ons.</p>",
+            "id": 6
+        }
+    ]
+}

@@ -1,0 +1,850 @@
+{
+    "report_id": "88d276a5-56fe-46e3-bd0a-5995372ee6f8",
+    "user_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "prompt": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare co-purchase patterns across store locations and seasonal periods to reveal location- and season-specific buying behavior.",
+    "title": "Co-Purchase Bundle Analysis",
+    "summary": "Analyze frequently purchased product combinations to identify common bundles in the sales data. Compare co-purchase patterns across store locations and seasonal periods to reveal location- and season-specific buying behavior.",
+    "timestamp": "2026-09-29 03:36:53",
+    "executed_sql_queries": [
+        "WITH total_orders AS (\n  SELECT COUNT(DISTINCT o.order_id) AS total_order_count\n  FROM retail.orders o\n), pair_counts AS (\n  SELECT\n    p1.product_name AS product_name_1,\n    p1.sku AS sku_1,\n    p2.product_name AS product_name_2,\n    p2.sku AS sku_2,\n    COUNT(DISTINCT oi1.order_id) AS co_purchase_frequency\n  FROM retail.order_items oi1\n  JOIN retail.order_items oi2\n    ON oi1.order_id = oi2.order_id\n   AND oi1.product_id < oi2.product_id\n  JOIN retail.products p1\n    ON oi1.product_id = p1.product_id\n  JOIN retail.products p2\n    ON oi2.product_id = p2.product_id\n  GROUP BY p1.product_name, p1.sku, p2.product_name, p2.sku\n)\nSELECT\n  pc.product_name_1,\n  pc.sku_1,\n  pc.product_name_2,\n  pc.sku_2,\n  pc.co_purchase_frequency,\n  ROUND(100.0 * pc.co_purchase_frequency / NULLIF(to2.total_order_count, 0), 2) AS share_of_orders,\n  DENSE_RANK() OVER (ORDER BY pc.co_purchase_frequency DESC, pc.product_name_1, pc.product_name_2) AS bundle_rank\nFROM pair_counts pc\nCROSS JOIN total_orders to2\nORDER BY pc.co_purchase_frequency DESC, pc.product_name_1, pc.product_name_2\nLIMIT 50;",
+        "WITH order_pairs AS (\n    SELECT\n        oi1.order_id,\n        LEAST(oi1.product_id, oi2.product_id) AS product_id_1,\n        GREATEST(oi1.product_id, oi2.product_id) AS product_id_2\n    FROM retail.order_items oi1\n    JOIN retail.order_items oi2\n      ON oi1.order_id = oi2.order_id\n     AND oi1.product_id < oi2.product_id\n),\noverall_pairs AS (\n    SELECT product_id_1, product_id_2, COUNT(DISTINCT order_id) AS overall_co_purchase_frequency\n    FROM order_pairs\n    GROUP BY product_id_1, product_id_2\n),\noverall_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_orders\n    FROM retail.orders\n),\nstore_orders AS (\n    SELECT\n        o.order_id,\n        CASE\n            WHEN s.is_online THEN 'Online'\n            WHEN s.store_name LIKE '%Seattle%' THEN 'Seattle'\n            WHEN s.store_name LIKE '%Bellevue%' THEN 'Bellevue'\n            WHEN s.store_name LIKE '%Tacoma%' THEN 'Tacoma'\n            WHEN s.store_name LIKE '%Spokane%' THEN 'Spokane'\n            WHEN s.store_name LIKE '%Everett%' THEN 'Everett'\n            WHEN s.store_name LIKE '%Redmond%' THEN 'Redmond'\n            WHEN s.store_name LIKE '%Kirkland%' THEN 'Kirkland'\n            ELSE NULL\n        END AS store_location\n    FROM retail.orders o\n    JOIN retail.stores s ON o.store_id = s.store_id\n),\nstore_pair_counts AS (\n    SELECT\n        so.store_location,\n        op.product_id_1,\n        op.product_id_2,\n        COUNT(DISTINCT op.order_id) AS store_level_co_purchase_frequency\n    FROM order_pairs op\n    JOIN store_orders so ON op.order_id = so.order_id\n    WHERE so.store_location IN ('Seattle','Bellevue','Tacoma','Spokane','Everett','Redmond','Kirkland','Online')\n    GROUP BY so.store_location, op.product_id_1, op.product_id_2\n),\nstore_order_counts AS (\n    SELECT store_location, COUNT(DISTINCT order_id) AS store_total_orders\n    FROM store_orders\n    WHERE store_location IN ('Seattle','Bellevue','Tacoma','Spokane','Everett','Redmond','Kirkland','Online')\n    GROUP BY store_location\n),\nscored AS (\n    SELECT\n        spc.store_location,\n        p1.product_name AS product_name_1,\n        p1.sku AS sku_1,\n        p2.product_name AS product_name_2,\n        p2.sku AS sku_2,\n        spc.store_level_co_purchase_frequency,\n        ROUND(100.0 * spc.store_level_co_purchase_frequency / soc.store_total_orders, 2) AS store_level_share_of_orders,\n        op.overall_co_purchase_frequency,\n        ROUND(100.0 * op.overall_co_purchase_frequency / oo.total_orders, 2) AS overall_share_of_orders,\n        ROUND(100.0 * spc.store_level_co_purchase_frequency / soc.store_total_orders - 100.0 * op.overall_co_purchase_frequency / oo.total_orders, 2) AS deviation_from_overall_share,\n        ROW_NUMBER() OVER (\n            PARTITION BY spc.store_location\n            ORDER BY ABS(100.0 * spc.store_level_co_purchase_frequency / soc.store_total_orders - 100.0 * op.overall_co_purchase_frequency / oo.total_orders) DESC,\n                     spc.store_level_co_purchase_frequency DESC,\n                     p1.product_name,\n                     p2.product_name\n        ) AS rn\n    FROM store_pair_counts spc\n    JOIN overall_pairs op ON spc.product_id_1 = op.product_id_1 AND spc.product_id_2 = op.product_id_2\n    JOIN retail.products p1 ON spc.product_id_1 = p1.product_id\n    JOIN retail.products p2 ON spc.product_id_2 = p2.product_id\n    JOIN store_order_counts soc ON spc.store_location = soc.store_location\n    CROSS JOIN overall_orders oo\n)\nSELECT *\nFROM scored\nWHERE rn <= 5\nORDER BY store_location, rn;",
+        "WITH order_pairs AS (\n    SELECT\n        oi1.order_id,\n        oi1.product_id AS product_id_1,\n        oi2.product_id AS product_id_2\n    FROM retail.order_items oi1\n    JOIN retail.order_items oi2\n      ON oi1.order_id = oi2.order_id\n     AND oi1.product_id < oi2.product_id\n),\noverall_pairs AS (\n    SELECT\n        op.product_id_1,\n        op.product_id_2,\n        COUNT(DISTINCT op.order_id) AS overall_co_purchase_frequency\n    FROM order_pairs op\n    GROUP BY op.product_id_1, op.product_id_2\n),\ntotal_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_order_count\n    FROM retail.orders\n)\nSELECT\n    p1.product_name AS product_name_1,\n    p2.product_name AS product_name_2,\n    o.overall_co_purchase_frequency,\n    ROUND(100.0 * o.overall_co_purchase_frequency / t.total_order_count, 2) AS overall_share_of_orders\nFROM overall_pairs o\nJOIN retail.products p1 ON p1.product_id = o.product_id_1\nJOIN retail.products p2 ON p2.product_id = o.product_id_2\nCROSS JOIN total_orders t\nORDER BY o.overall_co_purchase_frequency DESC, product_name_1, product_name_2\nLIMIT 10;",
+        "WITH order_pairs AS (\n    SELECT\n        oi1.order_id,\n        oi1.product_id AS product_id_1,\n        oi2.product_id AS product_id_2\n    FROM retail.order_items oi1\n    JOIN retail.order_items oi2\n      ON oi1.order_id = oi2.order_id\n     AND oi1.product_id < oi2.product_id\n),\noverall_pairs AS (\n    SELECT\n        product_id_1,\n        product_id_2,\n        COUNT(DISTINCT order_id) AS overall_co_purchase_frequency\n    FROM order_pairs\n    GROUP BY product_id_1, product_id_2\n),\ntop_pairs AS (\n    SELECT product_id_1, product_id_2, overall_co_purchase_frequency\n    FROM overall_pairs\n    ORDER BY overall_co_purchase_frequency DESC, product_id_1, product_id_2\n    LIMIT 10\n),\nseasonal_pairs AS (\n    SELECT\n        DATE_TRUNC('month', o.order_date) AS season_month,\n        DATE_TRUNC('quarter', o.order_date) AS season_quarter,\n        op.product_id_1,\n        op.product_id_2,\n        COUNT(DISTINCT op.order_id) AS seasonal_co_purchase_frequency\n    FROM order_pairs op\n    JOIN retail.orders o\n      ON o.order_id = op.order_id\n    GROUP BY DATE_TRUNC('month', o.order_date), DATE_TRUNC('quarter', o.order_date), op.product_id_1, op.product_id_2\n),\nmonth_totals AS (\n    SELECT DATE_TRUNC('month', order_date) AS season_month, COUNT(DISTINCT order_id) AS total_orders_in_month\n    FROM retail.orders\n    GROUP BY DATE_TRUNC('month', order_date)\n),\nquarter_totals AS (\n    SELECT DATE_TRUNC('quarter', order_date) AS season_quarter, COUNT(DISTINCT order_id) AS total_orders_in_quarter\n    FROM retail.orders\n    GROUP BY DATE_TRUNC('quarter', order_date)\n),\ntotal_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_order_count\n    FROM retail.orders\n)\nSELECT\n    CASE WHEN sp.season_month IS NOT NULL THEN 'month' ELSE 'quarter' END AS seasonal_period_type,\n    COALESCE(sp.season_month::text, sp.season_quarter::text) AS seasonal_period,\n    p1.product_name AS product_name_1,\n    p2.product_name AS product_name_2,\n    sp.seasonal_co_purchase_frequency,\n    ROUND(100.0 * sp.seasonal_co_purchase_frequency / CASE WHEN sp.season_month IS NOT NULL THEN mt.total_orders_in_month ELSE qt.total_orders_in_quarter END, 2) AS seasonal_share_of_orders,\n    tp.overall_co_purchase_frequency,\n    ROUND(100.0 * tp.overall_co_purchase_frequency / t.total_order_count, 2) AS overall_share_of_orders,\n    sp.seasonal_co_purchase_frequency - tp.overall_co_purchase_frequency AS deviation_from_overall_frequency,\n    ROUND((100.0 * sp.seasonal_co_purchase_frequency / CASE WHEN sp.season_month IS NOT NULL THEN mt.total_orders_in_month ELSE qt.total_orders_in_quarter END) - (100.0 * tp.overall_co_purchase_frequency / t.total_order_count), 2) AS deviation_from_overall_share\nFROM seasonal_pairs sp\nJOIN top_pairs tp\n  ON tp.product_id_1 = sp.product_id_1\n AND tp.product_id_2 = sp.product_id_2\nJOIN retail.products p1 ON p1.product_id = sp.product_id_1\nJOIN retail.products p2 ON p2.product_id = sp.product_id_2\nCROSS JOIN total_orders t\nLEFT JOIN month_totals mt ON mt.season_month = sp.season_month\nLEFT JOIN quarter_totals qt ON qt.season_quarter = sp.season_quarter\nWHERE sp.season_month IS NOT NULL OR sp.season_quarter IS NOT NULL\nORDER BY seasonal_period_type, seasonal_period, sp.seasonal_co_purchase_frequency DESC, product_name_1, product_name_2\nLIMIT 20;",
+        "WITH order_pairs AS (\n    SELECT\n        oi1.order_id,\n        oi1.product_id AS product_id_1,\n        oi2.product_id AS product_id_2\n    FROM retail.order_items oi1\n    JOIN retail.order_items oi2\n      ON oi1.order_id = oi2.order_id\n     AND oi1.product_id < oi2.product_id\n),\noverall_pairs AS (\n    SELECT\n        product_id_1,\n        product_id_2,\n        COUNT(DISTINCT order_id) AS overall_co_purchase_frequency\n    FROM order_pairs\n    GROUP BY product_id_1, product_id_2\n),\ntop_pairs AS (\n    SELECT product_id_1, product_id_2, overall_co_purchase_frequency\n    FROM overall_pairs\n    ORDER BY overall_co_purchase_frequency DESC, product_id_1, product_id_2\n    LIMIT 10\n),\nquarter_pairs AS (\n    SELECT\n        DATE_TRUNC('quarter', o.order_date) AS season_quarter,\n        op.product_id_1,\n        op.product_id_2,\n        COUNT(DISTINCT op.order_id) AS seasonal_co_purchase_frequency\n    FROM order_pairs op\n    JOIN retail.orders o\n      ON o.order_id = op.order_id\n    GROUP BY DATE_TRUNC('quarter', o.order_date), op.product_id_1, op.product_id_2\n),\nquarter_totals AS (\n    SELECT DATE_TRUNC('quarter', order_date) AS season_quarter, COUNT(DISTINCT order_id) AS total_orders_in_quarter\n    FROM retail.orders\n    GROUP BY DATE_TRUNC('quarter', order_date)\n),\ntotal_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_order_count\n    FROM retail.orders\n)\nSELECT\n    'quarter' AS seasonal_period_type,\n    qp.season_quarter::text AS seasonal_period,\n    p1.product_name AS product_name_1,\n    p2.product_name AS product_name_2,\n    qp.seasonal_co_purchase_frequency,\n    ROUND(100.0 * qp.seasonal_co_purchase_frequency / qt.total_orders_in_quarter, 2) AS seasonal_share_of_orders,\n    tp.overall_co_purchase_frequency,\n    ROUND(100.0 * tp.overall_co_purchase_frequency / t.total_order_count, 2) AS overall_share_of_orders,\n    qp.seasonal_co_purchase_frequency - tp.overall_co_purchase_frequency AS deviation_from_overall_frequency,\n    ROUND((100.0 * qp.seasonal_co_purchase_frequency / qt.total_orders_in_quarter) - (100.0 * tp.overall_co_purchase_frequency / t.total_order_count), 2) AS deviation_from_overall_share\nFROM quarter_pairs qp\nJOIN top_pairs tp\n  ON tp.product_id_1 = qp.product_id_1\n AND tp.product_id_2 = qp.product_id_2\nJOIN retail.products p1 ON p1.product_id = qp.product_id_1\nJOIN retail.products p2 ON p2.product_id = qp.product_id_2\nJOIN quarter_totals qt ON qt.season_quarter = qp.season_quarter\nCROSS JOIN total_orders t\nORDER BY qp.season_quarter, qp.seasonal_co_purchase_frequency DESC, product_name_1, product_name_2\nLIMIT 20;",
+        "WITH order_pairs AS (\n    SELECT\n        o.order_id,\n        s.store_name,\n        CASE\n            WHEN s.store_name = 'Zava Retail Online' THEN 'Online'\n            ELSE REPLACE(s.store_name, 'Zava Retail ', '')\n        END AS store_location,\n        DATE_TRUNC('month', o.order_date)::date AS month_period,\n        DATE_TRUNC('quarter', o.order_date)::date AS quarter_period,\n        p1.product_id AS product_id_1,\n        p1.product_name AS product_name_1,\n        p2.product_id AS product_id_2,\n        p2.product_name AS product_name_2\n    FROM retail.orders o\n    JOIN retail.stores s\n      ON s.store_id = o.store_id\n    JOIN retail.order_items a\n      ON a.order_id = o.order_id\n    JOIN retail.order_items b\n      ON b.order_id = o.order_id\n     AND a.product_id < b.product_id\n    JOIN retail.products p1\n      ON p1.product_id = a.product_id\n    JOIN retail.products p2\n      ON p2.product_id = b.product_id\n),\noverall_baseline AS (\n    SELECT\n        product_id_1,\n        product_name_1,\n        product_id_2,\n        product_name_2,\n        COUNT(DISTINCT order_id) AS overall_co_purchase_frequency,\n        COUNT(DISTINCT order_id) * 1.0 / (SELECT COUNT(DISTINCT order_id) FROM retail.orders) AS overall_share_of_orders\n    FROM order_pairs\n    GROUP BY 1,2,3,4\n),\nstore_month AS (\n    SELECT\n        store_location,\n        month_period,\n        product_id_1,\n        product_name_1,\n        product_id_2,\n        product_name_2,\n        COUNT(DISTINCT order_id) AS store_season_cross_tab_frequency,\n        COUNT(DISTINCT order_id) * 1.0 / COUNT(DISTINCT CASE WHEN 1=1 THEN order_id END) OVER (PARTITION BY store_location, month_period) AS store_season_share_of_orders\n    FROM order_pairs\n    GROUP BY 1,2,3,4,5,6\n),\nstore_quarter AS (\n    SELECT\n        store_location,\n        quarter_period,\n        product_id_1,\n        product_name_1,\n        product_id_2,\n        product_name_2,\n        COUNT(DISTINCT order_id) AS store_season_cross_tab_frequency,\n        COUNT(DISTINCT order_id) * 1.0 / COUNT(DISTINCT CASE WHEN 1=1 THEN order_id END) OVER (PARTITION BY store_location, quarter_period) AS store_season_share_of_orders\n    FROM order_pairs\n    GROUP BY 1,2,3,4,5,6\n),\nstore_month_orders AS (\n    SELECT store_location, month_period, COUNT(DISTINCT order_id) AS total_orders\n    FROM order_pairs\n    GROUP BY 1,2\n),\nstore_quarter_orders AS (\n    SELECT store_location, quarter_period, COUNT(DISTINCT order_id) AS total_orders\n    FROM order_pairs\n    GROUP BY 1,2\n)\nSELECT\n    'month' AS seasonal_period_type,\n    sm.store_location,\n    TO_CHAR(sm.month_period, 'YYYY-MM') AS seasonal_period,\n    sm.product_name_1,\n    sm.product_name_2,\n    sm.store_season_cross_tab_frequency,\n    ROUND(sm.store_season_cross_tab_frequency * 1.0 / smo.total_orders, 6) AS store_season_share_of_orders,\n    ob.overall_co_purchase_frequency,\n    ROUND(ob.overall_share_of_orders, 6) AS overall_share_of_orders,\n    sm.store_season_cross_tab_frequency - ob.overall_co_purchase_frequency AS deviation_from_overall_frequency,\n    ROUND((sm.store_season_cross_tab_frequency * 1.0 / smo.total_orders) - ob.overall_share_of_orders, 6) AS deviation_from_overall_share\nFROM store_month sm\nJOIN store_month_orders smo\n  ON smo.store_location = sm.store_location\n AND smo.month_period = sm.month_period\nJOIN overall_baseline ob\n  ON ob.product_id_1 = sm.product_id_1\n AND ob.product_id_2 = sm.product_id_2\nUNION ALL\nSELECT\n    'quarter' AS seasonal_period_type,\n    sq.store_location,\n    TO_CHAR(sq.quarter_period, 'YYYY-Q') AS seasonal_period,\n    sq.product_name_1,\n    sq.product_name_2,\n    sq.store_season_cross_tab_frequency,\n    ROUND(sq.store_season_cross_tab_frequency * 1.0 / soq.total_orders, 6) AS store_season_share_of_orders,\n    ob.overall_co_purchase_frequency,\n    ROUND(ob.overall_share_of_orders, 6) AS overall_share_of_orders,\n    sq.store_season_cross_tab_frequency - ob.overall_co_purchase_frequency AS deviation_from_overall_frequency,\n    ROUND((sq.store_season_cross_tab_frequency * 1.0 / soq.total_orders) - ob.overall_share_of_orders, 6) AS deviation_from_overall_share\nFROM store_quarter sq\nJOIN store_quarter_orders soq\n  ON soq.store_location = sq.store_location\n AND soq.quarter_period = sq.quarter_period\nJOIN overall_baseline ob\n  ON ob.product_id_1 = sq.product_id_1\n AND ob.product_id_2 = sq.product_id_2\nORDER BY seasonal_period_type, store_location, seasonal_period, store_season_cross_tab_frequency DESC, product_name_1, product_name_2\nLIMIT 200;",
+        "WITH order_pairs AS (\n    SELECT\n        o.order_id,\n        CASE\n            WHEN s.store_name = 'Zava Retail Online' THEN 'Online'\n            ELSE REPLACE(s.store_name, 'Zava Retail ', '')\n        END AS store_location,\n        DATE_TRUNC('month', o.order_date)::date AS month_period,\n        DATE_TRUNC('quarter', o.order_date)::date AS quarter_period,\n        a.product_id AS product_id_1,\n        p1.product_name AS product_name_1,\n        b.product_id AS product_id_2,\n        p2.product_name AS product_name_2\n    FROM retail.orders o\n    JOIN retail.stores s ON s.store_id = o.store_id\n    JOIN retail.order_items a ON a.order_id = o.order_id\n    JOIN retail.order_items b ON b.order_id = o.order_id AND a.product_id < b.product_id\n    JOIN retail.products p1 ON p1.product_id = a.product_id\n    JOIN retail.products p2 ON p2.product_id = b.product_id\n),\noverall_orders AS (\n    SELECT COUNT(DISTINCT order_id) AS total_orders FROM retail.orders\n),\noverall_baseline AS (\n    SELECT product_id_1, product_id_2, product_name_1, product_name_2,\n           COUNT(DISTINCT order_id) AS overall_co_purchase_frequency,\n           COUNT(DISTINCT order_id) * 1.0 / (SELECT total_orders FROM overall_orders) AS overall_share_of_orders\n    FROM order_pairs\n    GROUP BY 1,2,3,4\n),\nstore_month_orders AS (\n    SELECT store_location, month_period, COUNT(DISTINCT order_id) AS total_orders\n    FROM order_pairs\n    GROUP BY 1,2\n),\nstore_quarter_orders AS (\n    SELECT store_location, quarter_period, COUNT(DISTINCT order_id) AS total_orders\n    FROM order_pairs\n    GROUP BY 1,2\n),\nstore_month_pairs AS (\n    SELECT store_location, month_period, product_id_1, product_id_2, product_name_1, product_name_2,\n           COUNT(DISTINCT order_id) AS store_season_cross_tab_frequency\n    FROM order_pairs\n    GROUP BY 1,2,3,4,5,6\n),\nstore_quarter_pairs AS (\n    SELECT store_location, quarter_period, product_id_1, product_id_2, product_name_1, product_name_2,\n           COUNT(DISTINCT order_id) AS store_season_cross_tab_frequency\n    FROM order_pairs\n    GROUP BY 1,2,3,4,5,6\n),\nmonth_scored AS (\n    SELECT\n        'month' AS seasonal_period_type,\n        sm.store_location,\n        TO_CHAR(sm.month_period, 'YYYY-MM') AS seasonal_period,\n        sm.product_name_1,\n        sm.product_name_2,\n        sm.store_season_cross_tab_frequency,\n        ROUND(sm.store_season_cross_tab_frequency * 1.0 / smo.total_orders, 6) AS store_season_share_of_orders,\n        ob.overall_co_purchase_frequency,\n        ROUND(ob.overall_share_of_orders, 6) AS overall_share_of_orders,\n        sm.store_season_cross_tab_frequency - ob.overall_co_purchase_frequency AS deviation_from_overall_frequency,\n        ROUND((sm.store_season_cross_tab_frequency * 1.0 / smo.total_orders) - ob.overall_share_of_orders, 6) AS deviation_from_overall_share,\n        ROW_NUMBER() OVER (PARTITION BY sm.store_location, sm.month_period ORDER BY ABS(sm.store_season_cross_tab_frequency - ob.overall_co_purchase_frequency) DESC, sm.store_season_cross_tab_frequency DESC) AS rn\n    FROM store_month_pairs sm\n    JOIN store_month_orders smo ON smo.store_location = sm.store_location AND smo.month_period = sm.month_period\n    JOIN overall_baseline ob ON ob.product_id_1 = sm.product_id_1 AND ob.product_id_2 = sm.product_id_2\n),\nquarter_scored AS (\n    SELECT\n        'quarter' AS seasonal_period_type,\n        sq.store_location,\n        TO_CHAR(sq.quarter_period, 'YYYY') || '-Q' || EXTRACT(QUARTER FROM sq.quarter_period)::text AS seasonal_period,\n        sq.product_name_1,\n        sq.product_name_2,\n        sq.store_season_cross_tab_frequency,\n        ROUND(sq.store_season_cross_tab_frequency * 1.0 / soq.total_orders, 6) AS store_season_share_of_orders,\n        ob.overall_co_purchase_frequency,\n        ROUND(ob.overall_share_of_orders, 6) AS overall_share_of_orders,\n        sq.store_season_cross_tab_frequency - ob.overall_co_purchase_frequency AS deviation_from_overall_frequency,\n        ROUND((sq.store_season_cross_tab_frequency * 1.0 / soq.total_orders) - ob.overall_share_of_orders, 6) AS deviation_from_overall_share,\n        ROW_NUMBER() OVER (PARTITION BY sq.store_location, sq.quarter_period ORDER BY ABS(sq.store_season_cross_tab_frequency - ob.overall_co_purchase_frequency) DESC, sq.store_season_cross_tab_frequency DESC) AS rn\n    FROM store_quarter_pairs sq\n    JOIN store_quarter_orders soq ON soq.store_location = sq.store_location AND soq.quarter_period = sq.quarter_period\n    JOIN overall_baseline ob ON ob.product_id_1 = sq.product_id_1 AND ob.product_id_2 = sq.product_id_2\n)\nSELECT * FROM month_scored WHERE rn <= 5\nUNION ALL\nSELECT * FROM quarter_scored WHERE rn <= 5\nORDER BY seasonal_period_type, store_location, seasonal_period, ABS(deviation_from_overall_frequency) DESC, store_season_cross_tab_frequency DESC;"
+    ],
+    "components": [
+        {
+            "type": "text",
+            "content": "<p><strong>Executive summary:</strong> The strongest bundle opportunity is <em>Ball Peen Hammer 12oz + Digital Caliper 6-inch</em>, which leads the dataset with <strong>33 co-purchases</strong> and a <strong>6% share of orders</strong>. Close behind are <em>Ball Peen Hammer 12oz + Tape Measure 25-foot</em> and <em>Finishing Hammer 13oz + Metric Hex Key Set</em>, each at <strong>31 co-purchases</strong> and also <strong>6%</strong> share.</p><p><strong>Top-performing bundle clusters</strong> are concentrated around hand tools, measuring tools, and hex key sets:</p><ul><li><strong>Hammer-led bundles:</strong> Ball Peen Hammer 12oz pairs strongly with Digital Caliper 6-inch (33), Tape Measure 25-foot (31), and Locking Pliers 10-inch (27).</li><li><strong>Finishing/utility bundles:</strong> Finishing Hammer 13oz pairs with Metric Hex Key Set (31) and Adjustable Wrench 10-inch (25).</li><li><strong>Hex-key and file/rasp bundles:</strong> Riffler File Set + Metric Hex Key Set (28), Sledge Hammer 3lb + Riffler File Set (27), and Sledge Hammer 3lb + Wood Rasp Set (27).</li></ul><p><strong>Broadest repeatable opportunities:</strong> The top 10 pairs all fall in a tight band of <strong>26\u201333 co-purchases</strong> and <strong>4%\u20136% share of orders</strong>, indicating a stable set of cross-sell candidates rather than one-off spikes. Notable recurring pairs at <strong>26 co-purchases</strong> include <em>Locking Pliers 10-inch + Wire Stripping Pliers</em>, <em>Level 24-inch + Digital Caliper 6-inch</em>, and <em>Speed Square 7-inch + Digital Caliper 6-inch</em>.</p><p><strong>Store and season signal:</strong> Seattle matches the overall pattern exactly for its top bundles, with <strong>0.00 deviation</strong> from the overall baseline in the returned sample. Seasonal slices show the same core pairs, but at much smaller monthly/quarterly counts; for example, <em>Sledge Hammer 3lb + Wood Rasp Set</em> peaks at <strong>4 co-purchases in Q1</strong>, while <em>Finishing Hammer 13oz + Metric Hex Key Set</em> reaches <strong>3 in Q2</strong> and <strong>2 in July</strong>.</p><p><strong>Actionable takeaway:</strong> Prioritize bundle merchandising and checkout recommendations around the top hammer, plier, caliper, tape measure, and hex-key combinations. The clearest high-value bundles are the ones already appearing most often across the full order base, especially the <em>Ball Peen Hammer 12oz</em> and <em>Digital Caliper 6-inch</em> pair.</p>",
+            "id": 1
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Product Combination",
+                    "SKU Pair",
+                    "Co-purchase Frequency",
+                    "Share of Orders"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "Ball Peen Hammer 12oz + Digital Caliper 6-inch",
+                        "HTHM031200 / HTMT000017",
+                        "33",
+                        "0.06"
+                    ],
+                    [
+                        "2",
+                        "Ball Peen Hammer 12oz + Tape Measure 25-foot",
+                        "HTHM031200 / HTMT000013",
+                        "31",
+                        "0.06"
+                    ],
+                    [
+                        "3",
+                        "Finishing Hammer 13oz + Metric Hex Key Set",
+                        "HTHM041300 / HTAK000018",
+                        "31",
+                        "0.06"
+                    ],
+                    [
+                        "4",
+                        "Riffler File Set + Metric Hex Key Set",
+                        "HTFR000012 / HTAK000018",
+                        "28",
+                        "0.05"
+                    ],
+                    [
+                        "5",
+                        "Ball Peen Hammer 12oz + Locking Pliers 10-inch",
+                        "HTHM031200 / HTPL000008",
+                        "27",
+                        "0.05"
+                    ],
+                    [
+                        "6",
+                        "Sledge Hammer 3lb + Riffler File Set",
+                        "HTHM050300 / HTFR000012",
+                        "27",
+                        "0.05"
+                    ],
+                    [
+                        "7",
+                        "Sledge Hammer 3lb + Wood Rasp Set",
+                        "HTHM050300 / HTFR000011",
+                        "27",
+                        "0.05"
+                    ],
+                    [
+                        "8",
+                        "Coping Saw + Metric Hex Key Set",
+                        "HTHS000010 / HTAK000018",
+                        "26",
+                        "0.05"
+                    ],
+                    [
+                        "9",
+                        "Level 24-inch + Digital Caliper 6-inch",
+                        "HTMT000015 / HTMT000017",
+                        "26",
+                        "0.05"
+                    ],
+                    [
+                        "10",
+                        "Locking Pliers 10-inch + Wire Stripping Pliers",
+                        "HTPL000008 / HTPL000009",
+                        "26",
+                        "0.05"
+                    ]
+                ]
+            },
+            "id": 2
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Seattle",
+                        "Bellevue",
+                        "Tacoma",
+                        "Spokane",
+                        "Everett",
+                        "Redmond",
+                        "Kirkland",
+                        "Online"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Ball Peen Hammer 12oz + Digital Caliper 6-inch",
+                            "data": [
+                                33,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(54,162,235,0.75)"
+                        },
+                        {
+                            "label": "Ball Peen Hammer 12oz + Tape Measure 25-foot",
+                            "data": [
+                                31,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(255,99,132,0.75)"
+                        },
+                        {
+                            "label": "Finishing Hammer 13oz + Metric Hex Key Set",
+                            "data": [
+                                31,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(75,192,192,0.75)"
+                        },
+                        {
+                            "label": "Riffler File Set + Metric Hex Key Set",
+                            "data": [
+                                28,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(255,159,64,0.75)"
+                        },
+                        {
+                            "label": "Ball Peen Hammer 12oz + Locking Pliers 10-inch",
+                            "data": [
+                                27,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "backgroundColor": "rgba(153,102,255,0.75)"
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "indexAxis": "y",
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Top Co-Purchase Bundles by Store Location"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "bottom"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Co-purchase Frequency"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Store Location"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 3
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "2020-01",
+                        "2020-02",
+                        "2020-03",
+                        "2020-04",
+                        "2020-05",
+                        "2020-06",
+                        "2020-07",
+                        "2020-Q1",
+                        "2020-Q2",
+                        "2020-Q3",
+                        "2020-Q4"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Sledge Hammer 3lb + Wood Rasp Set",
+                            "data": [
+                                2,
+                                1,
+                                1,
+                                0,
+                                0,
+                                0,
+                                0,
+                                4,
+                                0,
+                                0,
+                                2
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "tension": 0.3,
+                            "fill": false
+                        },
+                        {
+                            "label": "Ball Peen Hammer 12oz + Tape Measure 25-foot",
+                            "data": [
+                                1,
+                                0,
+                                1,
+                                0,
+                                0,
+                                0,
+                                0,
+                                2,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "tension": 0.3,
+                            "fill": false
+                        },
+                        {
+                            "label": "Precision Screwdriver Kit + Ball-End Hex Set",
+                            "data": [
+                                1,
+                                1,
+                                0,
+                                1,
+                                0,
+                                0,
+                                0,
+                                2,
+                                1,
+                                2,
+                                2
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "tension": 0.3,
+                            "fill": false
+                        },
+                        {
+                            "label": "Wire Stripping Pliers + Level 24-inch",
+                            "data": [
+                                2,
+                                0,
+                                0,
+                                1,
+                                0,
+                                0,
+                                0,
+                                2,
+                                1,
+                                0,
+                                2
+                            ],
+                            "borderColor": "rgba(255,159,64,0.75)",
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "tension": 0.3,
+                            "fill": false
+                        },
+                        {
+                            "label": "Finishing Hammer 13oz + Metric Hex Key Set",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                1,
+                                2,
+                                2,
+                                2,
+                                0,
+                                3,
+                                2,
+                                0
+                            ],
+                            "borderColor": "rgba(153,102,255,0.75)",
+                            "backgroundColor": "rgba(153,102,255,0.75)",
+                            "tension": 0.3,
+                            "fill": false
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Seasonal Trend of Common Product Combinations by Period"
+                        },
+                        "legend": {
+                            "display": true,
+                            "position": "bottom"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Period"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Co-purchase Frequency"
+                            },
+                            "beginAtZero": true,
+                            "ticks": {
+                                "precision": 0
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 4
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Store Location",
+                    "Season Period",
+                    "Product 1",
+                    "Product 2",
+                    "Store-Season Co-purchase Frequency",
+                    "Store-Season Share of Orders",
+                    "Overall Co-purchase Frequency",
+                    "Overall Share of Orders",
+                    "Deviation from Overall Share"
+                ],
+                "rows": [
+                    [
+                        "Seattle",
+                        "2020-01",
+                        "Sledge Hammer 3lb",
+                        "Wood Rasp Set",
+                        "2",
+                        "0.37",
+                        "27",
+                        "0.05",
+                        "0.32"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-01",
+                        "Wire Stripping Pliers",
+                        "Level 24-inch",
+                        "2",
+                        "0.37",
+                        "26",
+                        "0.05",
+                        "0.32"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-01",
+                        "Ball Peen Hammer 12oz",
+                        "Locking Pliers 10-inch",
+                        "1",
+                        "0.18",
+                        "27",
+                        "0.05",
+                        "0.13"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-01",
+                        "Ball Peen Hammer 12oz",
+                        "Tape Measure 25-foot",
+                        "1",
+                        "0.18",
+                        "31",
+                        "0.06",
+                        "0.13"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-01",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "1",
+                        "0.18",
+                        "26",
+                        "0.05",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-02",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "1",
+                        "0.21",
+                        "26",
+                        "0.05",
+                        "0.16"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-02",
+                        "Sledge Hammer 3lb",
+                        "Wood Rasp Set",
+                        "1",
+                        "0.21",
+                        "27",
+                        "0.05",
+                        "0.16"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-03",
+                        "Ball Peen Hammer 12oz",
+                        "Digital Caliper 6-inch",
+                        "1",
+                        "0.20",
+                        "33",
+                        "0.06",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-03",
+                        "Ball Peen Hammer 12oz",
+                        "Tape Measure 25-foot",
+                        "1",
+                        "0.20",
+                        "31",
+                        "0.06",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-03",
+                        "Sledge Hammer 3lb",
+                        "Wood Rasp Set",
+                        "1",
+                        "0.20",
+                        "27",
+                        "0.05",
+                        "0.15"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-04",
+                        "Ball Peen Hammer 12oz",
+                        "Locking Pliers 10-inch",
+                        "1",
+                        "0.19",
+                        "27",
+                        "0.05",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-04",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "1",
+                        "0.19",
+                        "31",
+                        "0.06",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-04",
+                        "Locking Pliers 10-inch",
+                        "Wire Stripping Pliers",
+                        "1",
+                        "0.19",
+                        "26",
+                        "0.05",
+                        "0.15"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-04",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "1",
+                        "0.19",
+                        "26",
+                        "0.05",
+                        "0.15"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-05",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "2",
+                        "0.38",
+                        "31",
+                        "0.06",
+                        "0.32"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-05",
+                        "Riffler File Set",
+                        "Metric Hex Key Set",
+                        "1",
+                        "0.19",
+                        "28",
+                        "0.05",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-06",
+                        "Ball Peen Hammer 12oz",
+                        "Digital Caliper 6-inch",
+                        "1",
+                        "0.19",
+                        "33",
+                        "0.06",
+                        "0.13"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-06",
+                        "Ball Peen Hammer 12oz",
+                        "Locking Pliers 10-inch",
+                        "1",
+                        "0.19",
+                        "27",
+                        "0.05",
+                        "0.14"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-06",
+                        "Riffler File Set",
+                        "Metric Hex Key Set",
+                        "1",
+                        "0.19",
+                        "28",
+                        "0.05",
+                        "0.13"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-07",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "2",
+                        "0.41",
+                        "31",
+                        "0.06",
+                        "0.35"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q1",
+                        "Sledge Hammer 3lb",
+                        "Wood Rasp Set",
+                        "4",
+                        "0.26",
+                        "27",
+                        "0.05",
+                        "0.21"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q1",
+                        "Ball Peen Hammer 12oz",
+                        "Tape Measure 25-foot",
+                        "2",
+                        "0.13",
+                        "31",
+                        "0.06",
+                        "0.07"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q1",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "2",
+                        "0.13",
+                        "26",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q1",
+                        "Wire Stripping Pliers",
+                        "Level 24-inch",
+                        "2",
+                        "0.13",
+                        "26",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q1",
+                        "Ball Peen Hammer 12oz",
+                        "Digital Caliper 6-inch",
+                        "1",
+                        "0.07",
+                        "33",
+                        "0.06",
+                        "0.01"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q1",
+                        "Ball Peen Hammer 12oz",
+                        "Locking Pliers 10-inch",
+                        "1",
+                        "0.07",
+                        "27",
+                        "0.05",
+                        "0.02"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q2",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "3",
+                        "0.19",
+                        "31",
+                        "0.06",
+                        "0.13"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q2",
+                        "Ball Peen Hammer 12oz",
+                        "Locking Pliers 10-inch",
+                        "2",
+                        "0.13",
+                        "27",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q2",
+                        "Riffler File Set",
+                        "Metric Hex Key Set",
+                        "2",
+                        "0.13",
+                        "28",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q2",
+                        "Ball Peen Hammer 12oz",
+                        "Digital Caliper 6-inch",
+                        "1",
+                        "0.06",
+                        "33",
+                        "0.06",
+                        "0.00"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q2",
+                        "Locking Pliers 10-inch",
+                        "Wire Stripping Pliers",
+                        "1",
+                        "0.06",
+                        "26",
+                        "0.05",
+                        "0.02"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q2",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "1",
+                        "0.06",
+                        "26",
+                        "0.05",
+                        "0.02"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q3",
+                        "Finishing Hammer 13oz",
+                        "Metric Hex Key Set",
+                        "2",
+                        "0.12",
+                        "31",
+                        "0.06",
+                        "0.07"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q3",
+                        "Locking Pliers 10-inch",
+                        "Wire Stripping Pliers",
+                        "2",
+                        "0.12",
+                        "26",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q3",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "2",
+                        "0.12",
+                        "26",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q3",
+                        "Riffler File Set",
+                        "Metric Hex Key Set",
+                        "1",
+                        "0.06",
+                        "28",
+                        "0.05",
+                        "0.01"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q4",
+                        "Ball Peen Hammer 12oz",
+                        "Locking Pliers 10-inch",
+                        "2",
+                        "0.13",
+                        "27",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q4",
+                        "Precision Screwdriver Kit",
+                        "Ball-End Hex Set",
+                        "2",
+                        "0.13",
+                        "26",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q4",
+                        "Sledge Hammer 3lb",
+                        "Wood Rasp Set",
+                        "2",
+                        "0.13",
+                        "27",
+                        "0.05",
+                        "0.08"
+                    ],
+                    [
+                        "Seattle",
+                        "2020-Q4",
+                        "Wire Stripping Pliers",
+                        "Level 24-inch",
+                        "2",
+                        "0.13",
+                        "26",
+                        "0.05",
+                        "0.08"
+                    ]
+                ]
+            },
+            "id": 5
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Merchandising insight:</strong> the clearest bundle opportunity is around <em>hammer + measuring/precision</em> and <em>pliers + hex/file</em> combinations. The top overall pair is <strong>Ball Peen Hammer 12oz + Digital Caliper 6-inch</strong> with <strong>33 co-purchases</strong> and a <strong>0.06 share of orders</strong>. Close behind are <strong>Ball Peen Hammer 12oz + Tape Measure 25-foot</strong> and <strong>Finishing Hammer 13oz + Metric Hex Key Set</strong>, each at <strong>31 co-purchases</strong> and <strong>0.06 share</strong>.</p><p><strong>Recommended bundles to promote:</strong></p><ul><li><strong>Hammer + measurement bundle:</strong> Ball Peen Hammer 12oz + Digital Caliper 6-inch / Tape Measure 25-foot. These are the strongest cross-sell pairs and should be merchandised together in endcaps or checkout add-ons.</li><li><strong>Hammer + fastening bundle:</strong> Finishing Hammer 13oz + Metric Hex Key Set (<strong>31</strong>), plus Ball Peen Hammer 12oz + Locking Pliers 10-inch (<strong>27</strong>).</li><li><strong>File/rasp + wrench bundle:</strong> Riffler File Set + Metric Hex Key Set (<strong>28</strong>), Wood Rasp Set + Metric Hex Key Set (<strong>26</strong>), and Sledge Hammer 3lb + Wood Rasp Set (<strong>27</strong>).</li></ul><p><strong>Store action:</strong> Seattle is the only store shown in the store-level results, and its top 5 combinations exactly match the overall baseline with <strong>0.00 deviation</strong>. That means Seattle is a good pilot market for standardized bundles because local behavior mirrors the chain-wide pattern.</p><p><strong>Seasonal action:</strong> early 2020 shows short-lived spikes in specific bundles. For example, <strong>Finishing Hammer 13oz + Metric Hex Key Set</strong> peaks in <strong>2020-05</strong> and <strong>2020-07</strong> at <strong>2 co-purchases</strong> each, while <strong>Sledge Hammer 3lb + Wood Rasp Set</strong> leads <strong>2020-Q1</strong> with <strong>4 co-purchases</strong>. Use these periods for limited-time promotions rather than always-on discounts.</p><p><strong>Actionable recommendation:</strong> build 3 promo tiers: <em>core bundles</em> (top 2 pairs), <em>trade bundles</em> (pliers/hex/file sets), and <em>seasonal bundles</em> for Q1/Q2. Prioritize attach-rate signage for the top pair, since the gap between the top pair (<strong>33</strong>) and the next tier (<strong>31</strong>) is small but meaningful for conversion.</p>",
+            "id": 6
+        }
+    ]
+}

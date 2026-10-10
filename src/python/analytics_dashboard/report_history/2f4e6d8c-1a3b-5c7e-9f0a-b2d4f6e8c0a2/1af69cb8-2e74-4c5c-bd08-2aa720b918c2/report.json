@@ -1,0 +1,433 @@
+{
+    "report_id": "1af69cb8-2e74-4c5c-bd08-2aa720b918c2",
+    "user_id": "2f4e6d8c-1a3b-5c7e-9f0a-b2d4f6e8c0a2",
+    "prompt": "Which stores are most and least aligned to the national seasonal pattern?",
+    "timestamp": "2026-09-28 09:22:37",
+    "components": [
+        {
+            "type": "chart",
+            "data": {
+                "type": "bar",
+                "data": {
+                    "labels": [
+                        "Grocery",
+                        "Apparel",
+                        "Electronics",
+                        "Home & Garden",
+                        "Beauty"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "Total Traffic",
+                            "data": [
+                                237605,
+                                167055,
+                                125605,
+                                101905,
+                                80105
+                            ],
+                            "backgroundColor": "rgba(54, 162, 235, 0.7)",
+                            "borderColor": "rgba(54, 162, 235, 1)",
+                            "borderWidth": 1,
+                            "yAxisID": "y"
+                        },
+                        {
+                            "label": "Total Units Sold",
+                            "data": [
+                                94703,
+                                36317,
+                                19782,
+                                16383,
+                                24094
+                            ],
+                            "backgroundColor": "rgba(255, 99, 132, 0.7)",
+                            "borderColor": "rgba(255, 99, 132, 1)",
+                            "borderWidth": 1,
+                            "yAxisID": "y1"
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "legend": {
+                            "position": "top"
+                        },
+                        "title": {
+                            "display": true,
+                            "text": "Traffic vs Units Sold by Category"
+                        }
+                    },
+                    "scales": {
+                        "y": {
+                            "type": "linear",
+                            "position": "left",
+                            "beginAtZero": true,
+                            "title": {
+                                "display": true,
+                                "text": "Traffic"
+                            }
+                        },
+                        "y1": {
+                            "type": "linear",
+                            "position": "right",
+                            "beginAtZero": true,
+                            "grid": {
+                                "drawOnChartArea": false
+                            },
+                            "title": {
+                                "display": true,
+                                "text": "Units Sold"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Category performance summary:</strong> Grocery leads across all stores and branches, with the highest traffic (<strong>237,605</strong>) and units sold (<strong>94,703</strong>) plus the best conversion rate (<strong>0.398</strong> units per visitor).</p><p><strong>High-conversion standout:</strong> Beauty ranks second in efficiency (<strong>0.301</strong>) and consistently outperforms Electronics and Home &amp; Garden in units sold despite lower traffic.</p><p><strong>Underperformers:</strong> Electronics and Home &amp; Garden have the weakest conversion rates (<strong>0.158</strong> and <strong>0.161</strong>), suggesting room for merchandising or assortment improvements.</p><p><strong>Branch view:</strong> North, West, East, and South perform very similarly overall; differences are modest, so <strong>category mix</strong> is the main driver of results rather than branch location.</p><p><strong>Store trend:</strong> Stores 07\u201310 show the strongest traffic and unit volumes, while Stores 03\u201306 lag behind.</p>"
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Section",
+                    "Dimension",
+                    "Rank / Group",
+                    "Traffic",
+                    "Units Sold",
+                    "Units per Traffic",
+                    "Notes"
+                ],
+                "rows": [
+                    [
+                        "Overall category ranking",
+                        "Category",
+                        "Grocery",
+                        "237,605",
+                        "94,703",
+                        "0.398",
+                        "Leads in both traffic and units sold"
+                    ],
+                    [
+                        "Overall category ranking",
+                        "Category",
+                        "Apparel",
+                        "167,055",
+                        "36,317",
+                        "0.217",
+                        "High traffic, moderate conversion"
+                    ],
+                    [
+                        "Overall category ranking",
+                        "Category",
+                        "Electronics",
+                        "125,605",
+                        "19,782",
+                        "0.158",
+                        "Weak conversion"
+                    ],
+                    [
+                        "Overall category ranking",
+                        "Category",
+                        "Home & Garden",
+                        "101,905",
+                        "16,383",
+                        "0.161",
+                        "Weak conversion"
+                    ],
+                    [
+                        "Overall category ranking",
+                        "Category",
+                        "Beauty",
+                        "80,105",
+                        "24,094",
+                        "0.301",
+                        "Strong conversion despite lower traffic"
+                    ],
+                    [
+                        "Branch comparison",
+                        "North",
+                        "Total",
+                        "177,395",
+                        "40,257",
+                        "0.227",
+                        "Highest traffic and units among branches"
+                    ],
+                    [
+                        "Branch comparison",
+                        "West",
+                        "Total",
+                        "175,900",
+                        "39,440",
+                        "0.224",
+                        "Very close to North"
+                    ],
+                    [
+                        "Branch comparison",
+                        "East",
+                        "Total",
+                        "170,715",
+                        "38,634",
+                        "0.226",
+                        "Slightly lower traffic, similar efficiency"
+                    ],
+                    [
+                        "Branch comparison",
+                        "South",
+                        "Total",
+                        "169,185",
+                        "38,309",
+                        "0.226",
+                        "Lowest traffic and units, similar efficiency"
+                    ],
+                    [
+                        "North by category",
+                        "Grocery",
+                        "North",
+                        "71,425",
+                        "28,553",
+                        "0.400",
+                        "Dominant category"
+                    ],
+                    [
+                        "North by category",
+                        "Apparel",
+                        "North",
+                        "52,285",
+                        "11,532",
+                        "0.221",
+                        "Second in traffic"
+                    ],
+                    [
+                        "North by category",
+                        "Electronics",
+                        "North",
+                        "38,105",
+                        "6,107",
+                        "0.160",
+                        "Low conversion"
+                    ],
+                    [
+                        "North by category",
+                        "Home & Garden",
+                        "North",
+                        "31,505",
+                        "5,064",
+                        "0.161",
+                        "Low conversion"
+                    ],
+                    [
+                        "North by category",
+                        "Beauty",
+                        "North",
+                        "25,195",
+                        "7,553",
+                        "0.300",
+                        "Outperforms Electronics and Home & Garden"
+                    ],
+                    [
+                        "South by category",
+                        "Grocery",
+                        "South",
+                        "67,930",
+                        "27,150",
+                        "0.400",
+                        "Dominant category"
+                    ],
+                    [
+                        "South by category",
+                        "Apparel",
+                        "South",
+                        "44,985",
+                        "9,522",
+                        "0.212",
+                        "Second in traffic"
+                    ],
+                    [
+                        "South by category",
+                        "Electronics",
+                        "South",
+                        "35,245",
+                        "5,583",
+                        "0.158",
+                        "Low conversion"
+                    ],
+                    [
+                        "South by category",
+                        "Home & Garden",
+                        "South",
+                        "29,455",
+                        "4,731",
+                        "0.161",
+                        "Low conversion"
+                    ],
+                    [
+                        "South by category",
+                        "Beauty",
+                        "South",
+                        "23,745",
+                        "7,102",
+                        "0.299",
+                        "Outperforms Electronics and Home & Garden"
+                    ],
+                    [
+                        "East by category",
+                        "Grocery",
+                        "East",
+                        "47,630",
+                        "19,052",
+                        "0.400",
+                        "Dominant category"
+                    ],
+                    [
+                        "East by category",
+                        "Apparel",
+                        "East",
+                        "32,120",
+                        "6,946",
+                        "0.216",
+                        "Second in traffic"
+                    ],
+                    [
+                        "East by category",
+                        "Electronics",
+                        "East",
+                        "24,795",
+                        "3,983",
+                        "0.161",
+                        "Low conversion"
+                    ],
+                    [
+                        "East by category",
+                        "Home & Garden",
+                        "East",
+                        "20,035",
+                        "3,221",
+                        "0.161",
+                        "Low conversion"
+                    ],
+                    [
+                        "East by category",
+                        "Beauty",
+                        "East",
+                        "16,470",
+                        "4,933",
+                        "0.299",
+                        "Relatively strong conversion"
+                    ],
+                    [
+                        "West by category",
+                        "Grocery",
+                        "West",
+                        "50,620",
+                        "19,948",
+                        "0.394",
+                        "Dominant category"
+                    ],
+                    [
+                        "West by category",
+                        "Apparel",
+                        "West",
+                        "33,665",
+                        "7,317",
+                        "0.217",
+                        "Second in traffic"
+                    ],
+                    [
+                        "West by category",
+                        "Electronics",
+                        "West",
+                        "27,460",
+                        "4,109",
+                        "0.150",
+                        "Weakest conversion among categories"
+                    ],
+                    [
+                        "West by category",
+                        "Home & Garden",
+                        "West",
+                        "20,910",
+                        "3,367",
+                        "0.161",
+                        "Low conversion"
+                    ],
+                    [
+                        "West by category",
+                        "Beauty",
+                        "West",
+                        "14,695",
+                        "4,506",
+                        "0.307",
+                        "Lowest traffic but strong conversion"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 09",
+                        "Top store",
+                        "73,830",
+                        "19,952",
+                        "",
+                        "Highest traffic and units"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 07",
+                        "Top store",
+                        "72,090",
+                        "19,477",
+                        "",
+                        "Among top performers"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 10",
+                        "Top store",
+                        "71,520",
+                        "19,295",
+                        "",
+                        "Among top performers"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 08",
+                        "Top store",
+                        "68,960",
+                        "18,658",
+                        "",
+                        "Among top performers"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 06",
+                        "Lower store",
+                        "54,175",
+                        "13,288",
+                        "",
+                        "Lowest traffic and units"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 05",
+                        "Lower store",
+                        "57,015",
+                        "14,014",
+                        "",
+                        "Lower performer"
+                    ],
+                    [
+                        "Store performance",
+                        "Store 03",
+                        "Lower store",
+                        "59,155",
+                        "14,502",
+                        "",
+                        "Lower performer"
+                    ]
+                ]
+            }
+        }
+    ]
+}

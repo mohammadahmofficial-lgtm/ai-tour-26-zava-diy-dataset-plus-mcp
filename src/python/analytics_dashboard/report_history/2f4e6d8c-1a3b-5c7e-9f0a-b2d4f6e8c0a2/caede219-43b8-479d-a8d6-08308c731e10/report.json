@@ -1,0 +1,395 @@
+{
+    "report_id": "caede219-43b8-479d-a8d6-08308c731e10",
+    "user_id": "2f4e6d8c-1a3b-5c7e-9f0a-b2d4f6e8c0a2",
+    "prompt": "Which category has the sharpest seasonal swing, and how far ahead would you need to act on it?",
+    "title": "Seasonal Swing Lead Time",
+    "summary": "The prompt asks which category shows the sharpest seasonal swing and how much lead time is needed to respond. It implies comparing categories by seasonality magnitude and identifying the earliest action window required.",
+    "timestamp": "2026-09-29 03:24:22",
+    "executed_sql_queries": [
+        "WITH monthly_category_sales AS (\n  SELECT\n    p.category_id,\n    DATE_TRUNC('month', o.order_date) AS month,\n    SUM(oi.total_amount) AS monthly_sales\n  FROM retail.orders o\n  JOIN retail.order_items oi\n    ON o.order_id = oi.order_id\n  JOIN retail.products p\n    ON oi.product_id = p.product_id\n  GROUP BY p.category_id, DATE_TRUNC('month', o.order_date)\n), category_stats AS (\n  SELECT\n    category_id,\n    MAX(monthly_sales) AS peak_month_sales,\n    MIN(monthly_sales) AS trough_month_sales,\n    MAX(monthly_sales) - MIN(monthly_sales) AS peak_to_trough_difference,\n    MAX(monthly_sales) - MIN(monthly_sales) AS seasonal_swing_magnitude\n  FROM monthly_category_sales\n  GROUP BY category_id\n)\nSELECT *\nFROM category_stats\nORDER BY category_id;",
+        "WITH monthly_category_sales AS (\n    SELECT\n        p.category_id,\n        DATE_TRUNC('month', o.order_date)::date AS month,\n        SUM(oi.total_amount) AS monthly_sales\n    FROM retail.orders o\n    JOIN retail.order_items oi\n        ON o.order_id = oi.order_id\n    JOIN retail.products p\n        ON oi.product_id = p.product_id\n    GROUP BY p.category_id, DATE_TRUNC('month', o.order_date)::date\n), ranked AS (\n    SELECT\n        category_id,\n        month,\n        monthly_sales,\n        monthly_sales - LAG(monthly_sales) OVER (PARTITION BY category_id ORDER BY month) AS month_to_month_change,\n        ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY monthly_sales DESC, month ASC) AS rn_desc,\n        ROW_NUMBER() OVER (PARTITION BY category_id ORDER BY monthly_sales ASC, month ASC) AS rn_asc\n    FROM monthly_category_sales\n)\nSELECT\n    category_id,\n    MAX(CASE WHEN rn_desc = 1 THEN month END) AS peak_month,\n    MAX(CASE WHEN rn_desc = 1 THEN monthly_sales END) AS peak_month_sales,\n    MAX(CASE WHEN rn_asc = 1 THEN month END) AS trough_month,\n    MAX(CASE WHEN rn_asc = 1 THEN monthly_sales END) AS trough_month_sales,\n    MAX(CASE WHEN rn_desc = 1 THEN monthly_sales END) - MAX(CASE WHEN rn_asc = 1 THEN monthly_sales END) AS peak_to_trough_difference,\n    MAX(month_to_month_change) AS max_month_to_month_increase,\n    MIN(month_to_month_change) AS max_month_to_month_decrease\nFROM ranked\nGROUP BY category_id\nORDER BY category_id;",
+        "WITH monthly_category_sales AS (\n    SELECT\n        p.category_id,\n        DATE_TRUNC('month', o.order_date)::date AS month,\n        SUM(oi.total_amount) AS monthly_sales\n    FROM retail.orders o\n    JOIN retail.order_items oi\n      ON o.order_id = oi.order_id\n    JOIN retail.products p\n      ON oi.product_id = p.product_id\n    GROUP BY p.category_id, DATE_TRUNC('month', o.order_date)::date\n), category_stats AS (\n    SELECT\n        category_id,\n        MAX(monthly_sales) AS peak_month_sales,\n        MIN(monthly_sales) AS trough_month_sales,\n        MAX(monthly_sales) - MIN(monthly_sales) AS peak_to_trough_difference\n    FROM monthly_category_sales\n    GROUP BY category_id\n)\nSELECT *\nFROM category_stats\nORDER BY peak_to_trough_difference DESC;",
+        "WITH monthly_category_sales AS (\n    SELECT\n        p.category_id,\n        DATE_TRUNC('month', o.order_date)::date AS month,\n        SUM(oi.total_amount) AS monthly_sales\n    FROM retail.orders o\n    JOIN retail.order_items oi\n      ON o.order_id = oi.order_id\n    JOIN retail.products p\n      ON oi.product_id = p.product_id\n    GROUP BY p.category_id, DATE_TRUNC('month', o.order_date)::date\n), category_stats AS (\n    SELECT\n        category_id,\n        MAX(monthly_sales) AS peak_month_sales,\n        MIN(monthly_sales) AS trough_month_sales,\n        MAX(monthly_sales) - MIN(monthly_sales) AS peak_to_trough_difference\n    FROM monthly_category_sales\n    GROUP BY category_id\n), top_category AS (\n    SELECT category_id\n    FROM category_stats\n    ORDER BY peak_to_trough_difference DESC\n    LIMIT 1\n)\nSELECT\n    m.category_id,\n    m.month,\n    m.monthly_sales,\n    EXTRACT(MONTH FROM m.month) AS month_num\nFROM monthly_category_sales m\nJOIN top_category t\n  ON m.category_id = t.category_id\nORDER BY m.month;"
+    ],
+    "components": [
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Rank",
+                    "Category",
+                    "Peak Month",
+                    "Trough Month",
+                    "Seasonal Swing Magnitude"
+                ],
+                "rows": [
+                    [
+                        "1",
+                        "GARDEN & OUTDOOR",
+                        "August",
+                        "December",
+                        "79197.21"
+                    ],
+                    [
+                        "2",
+                        "STORAGE & ORGANIZATION",
+                        "December",
+                        "May",
+                        "61259.65"
+                    ],
+                    [
+                        "3",
+                        "PAINT & FINISHES",
+                        "June",
+                        "December",
+                        "13052.87"
+                    ],
+                    [
+                        "4",
+                        "POWER TOOLS",
+                        "April",
+                        "December",
+                        "12052.51"
+                    ],
+                    [
+                        "5",
+                        "PLUMBING",
+                        "October",
+                        "June",
+                        "11996.42"
+                    ],
+                    [
+                        "6",
+                        "HAND TOOLS",
+                        "May",
+                        "November",
+                        "11869.86"
+                    ],
+                    [
+                        "7",
+                        "LUMBER & BUILDING MATERIALS",
+                        "October",
+                        "August",
+                        "9382.72"
+                    ],
+                    [
+                        "8",
+                        "ELECTRICAL",
+                        "May",
+                        "June",
+                        "9075.55"
+                    ],
+                    [
+                        "9",
+                        "HARDWARE",
+                        "November",
+                        "July",
+                        "7691.02"
+                    ]
+                ]
+            },
+            "id": 1
+        },
+        {
+            "type": "chart",
+            "data": {
+                "type": "line",
+                "data": {
+                    "labels": [
+                        "Jan",
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul",
+                        "Aug",
+                        "Sep",
+                        "Oct",
+                        "Nov",
+                        "Dec"
+                    ],
+                    "datasets": [
+                        {
+                            "label": "ELECTRICAL",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                14941.48,
+                                5865.93,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "GARDEN & OUTDOOR",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                107216.21,
+                                0,
+                                0,
+                                0,
+                                28019
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "HAND TOOLS",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                18328.36,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                6458.5,
+                                0
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "HARDWARE",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                11024.74,
+                                0
+                            ],
+                            "borderColor": "rgba(255,159,64,0.75)",
+                            "backgroundColor": "rgba(255,159,64,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "LUMBER & BUILDING MATERIALS",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(153,102,255,0.75)",
+                            "backgroundColor": "rgba(153,102,255,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "PAINT & FINISHES",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(201,203,207,0.75)",
+                            "backgroundColor": "rgba(201,203,207,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "PLUMBING",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(54,162,235,0.75)",
+                            "backgroundColor": "rgba(54,162,235,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "POWER TOOLS",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ],
+                            "borderColor": "rgba(255,99,132,0.75)",
+                            "backgroundColor": "rgba(255,99,132,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        },
+                        {
+                            "label": "STORAGE & ORGANIZATION",
+                            "data": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                76566.26
+                            ],
+                            "borderColor": "rgba(75,192,192,0.75)",
+                            "backgroundColor": "rgba(75,192,192,0.75)",
+                            "fill": false,
+                            "tension": 0.25,
+                            "spanGaps": true
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": true,
+                    "maintainAspectRatio": false,
+                    "plugins": {
+                        "title": {
+                            "display": true,
+                            "text": "Category Sales by Month Across Available Years"
+                        }
+                    },
+                    "scales": {
+                        "x": {
+                            "title": {
+                                "display": true,
+                                "text": "Month"
+                            }
+                        },
+                        "y": {
+                            "title": {
+                                "display": true,
+                                "text": "Sales"
+                            }
+                        }
+                    }
+                }
+            },
+            "id": 2
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Most seasonal category:</strong> <em>Category 2</em> (GARDEN &amp; OUTDOOR).</p><p>It has the largest peak-to-trough swing in the full monthly history: <strong>$79,197.21</strong>, rising from a trough of <strong>$28,019.00</strong> in <strong>December 2020</strong> to a peak of <strong>$107,216.21</strong> in <strong>August 2025</strong>.</p><ul><li><strong>Peak month:</strong> August</li><li><strong>Trough month:</strong> December</li><li><strong>Seasonal swing magnitude:</strong> $79,197.21</li><li><strong>Month-to-month jump:</strong> largest observed increase was <strong>+$42,255.65</strong></li><li><strong>Month-to-month drop:</strong> largest observed decrease was <strong>-$46,156.97</strong></li></ul><p>For context, the next most seasonal category is <strong>Category 9</strong> (STORAGE &amp; ORGANIZATION) at <strong>$61,259.65</strong>, so Category 2\u2019s swing is larger by <strong>$17,937.56</strong>.</p>",
+            "id": 3
+        },
+        {
+            "type": "text",
+            "content": "<p><strong>Most seasonal category:</strong> Category 2 shows the largest seasonal swing, with sales rising from a <em>December trough</em> of <strong>28,019.00</strong> to an <em>August peak</em> of <strong>107,216.21</strong>. That is a <strong>79,197.21</strong> increase, or about <strong>3.8x</strong> the trough level.</p><p><strong>How far ahead action is needed:</strong> Because the low point occurs in <strong>December</strong> and the peak arrives in <strong>August</strong> of the next cycle, planning should begin about <strong>8 months in advance</strong> of the peak.</p><ul><li><strong>Peak month:</strong> August</li><li><strong>Trough month:</strong> December</li><li><strong>Lead time from trough to peak:</strong> 8 months</li><li><strong>Peak-to-trough difference:</strong> 79,197.21</li></ul><p><strong>Implication:</strong> For this category, inventory, promotions, and staffing should be ramped up well before summer, since the seasonal build starts long before the August high point.</p>",
+            "id": 4
+        },
+        {
+            "type": "table",
+            "data": {
+                "headers": [
+                    "Metric",
+                    "Value"
+                ],
+                "rows": [
+                    [
+                        "Top seasonal category",
+                        "GARDEN & OUTDOOR"
+                    ],
+                    [
+                        "Peak month",
+                        "August (month 8)"
+                    ],
+                    [
+                        "Peak month sales",
+                        "107,216.21"
+                    ],
+                    [
+                        "Trough month",
+                        "December (month 12)"
+                    ],
+                    [
+                        "Trough month sales",
+                        "28,019.00"
+                    ],
+                    [
+                        "Seasonal swing magnitude",
+                        "79,197.21"
+                    ],
+                    [
+                        "Lead-time window before peak",
+                        "8 months"
+                    ],
+                    [
+                        "Supporting detail",
+                        "Bottoms out in December and reaches its seasonal high in August of the following cycle"
+                    ]
+                ]
+            },
+            "id": 5
+        }
+    ]
+}

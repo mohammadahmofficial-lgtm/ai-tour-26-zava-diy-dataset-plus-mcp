@@ -1,0 +1,14 @@
+{
+    "report_id": "e0c4a094-dadd-4064-8298-78ce0bcce5b6",
+    "user_id": "00000000-0000-0000-0000-000000000000",
+    "prompt": "compare the sales from last year q4 with this year q1",
+    "title": "Q4 vs Q1 Sales Comparison",
+    "summary": "Compare sales performance from last year\u2019s Q4 with this year\u2019s Q1. Highlight changes in revenue, growth or decline, and any notable trends.",
+    "timestamp": "2026-10-01 05:50:54",
+    "executed_sql_queries": [
+        "SELECT MIN(order_date) AS min_order_date, MAX(order_date) AS max_order_date FROM retail.orders;",
+        "SELECT DATE_TRUNC('month', o.order_date) AS month_start, SUM(oi.total_amount) AS monthly_sales\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nJOIN retail.products p ON oi.product_id = p.product_id\nWHERE o.order_date >= DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '1 quarter'\n  AND o.order_date < DATE_TRUNC('quarter', CURRENT_DATE) + INTERVAL '1 quarter'\nGROUP BY 1\nORDER BY 1;",
+        "WITH bounds AS (\n  SELECT\n    DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '3 months' AS last_year_start,\n    DATE_TRUNC('year', CURRENT_DATE) AS this_year_start,\n    DATE_TRUNC('year', CURRENT_DATE) + INTERVAL '3 months' AS this_q2_start\n)\nSELECT\n  DATE_TRUNC('month', o.order_date) AS month_start,\n  SUM(oi.total_amount) AS monthly_sales\nFROM retail.orders o\nJOIN retail.order_items oi ON o.order_id = oi.order_id\nJOIN retail.products p ON oi.product_id = p.product_id\nCROSS JOIN bounds b\nWHERE (\n    o.order_date >= b.last_year_start AND o.order_date < b.this_year_start\n  )\n  OR (\n    o.order_date >= b.this_year_start AND o.order_date < b.this_q2_start\n  )\nGROUP BY 1\nORDER BY 1;",
+        "SELECT DATE_TRUNC('quarter', o.order_date) AS quarter_start, s.store_name, SUM(oi.total_amount) AS sales\nFROM retail.orders o\nJOIN retail.order_items oi ON oi.order_id = o.order_id\nJOIN retail.stores s ON s.store_id = o.store_id\nWHERE o.order_date >= DATE_TRUNC('quarter', DATE_TRUNC('year', CURRENT_DATE) - INTERVAL '1 year' + INTERVAL '9 months')\n  AND o.order_date < DATE_TRUNC('quarter', CURRENT_DATE) + INTERVAL '3 months'\nGROUP BY 1, 2\nORDER BY 1, 2;"
+    ]
+}
