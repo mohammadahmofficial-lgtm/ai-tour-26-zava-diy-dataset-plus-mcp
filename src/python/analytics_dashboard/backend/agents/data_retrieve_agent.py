@@ -39,7 +39,10 @@ Valid actions:
 4. {{"thought": "I've tried 5+ times and the task is genuinely too complex.", "action": "request_subdivision", "failed_query": "...", "intent": "...", "validation_feedback": "..."}}
 
 Rules:
-- PRE-FLIGHT CHECK: Use the 'thought' field to map out JOINs and column names. Catch mistakes before the SQL is executed.
+- PRE-FLIGHT CHECK: Verify table relationships, JOIN keys, and join cardinality against the schemas before executing SQL.
+- JOIN SAFETY: Never join tables merely because they share a column name. Use the actual entity relationship and its identifying keys. For hierarchical tables, distinguish parent-category keys from child-type keys.
+- AGGREGATION SAFETY: Ensure each fact row contributes only once to SUM/COUNT calculations unless duplication is explicitly intended. Check for accidental many-to-many joins and inflated totals.
+- COMPARISON CONSISTENCY: When comparing periods, stores, categories, or channels, use identical JOIN paths, grouping dimensions, filters, and metric definitions across all compared datasets. Never compare category-level aggregates against product-type-level aggregates. Prefer a single SQL query with conditional aggregation or GROUP BY period to ensure consistency.
 - Always fetch schemas first.
 - Use exact column names.
 - NEVER download raw tables. The dataset contains millions of rows.
