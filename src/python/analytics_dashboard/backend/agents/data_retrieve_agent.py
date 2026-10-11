@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import os
+import re
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -21,6 +22,9 @@ from .llm_client import call_llm
 # Resolved once at import time
 _MCP_SCRIPT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../../mcp_server/sales_analysis/sales_analysis.py")
+)
+_SEMANTIC_MCP_SCRIPT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../../mcp_server/customer_sales/customer_sales_semantic_search.py")
 )
 
 _PROCESS_ERRORS = ("ProcessLookupError", "No such process", "TimeoutError", "deadline exceeded", "CancelledError")
@@ -35,8 +39,9 @@ Use the 'thought' field to double-check column names against the schema and veri
 Valid actions:
 1. {{"thought": "I need the schemas for customers and orders.", "action": "get_schemas", "tables": ["retail.customers", "retail.orders"]}}
 2. {{"thought": "I verified the JOIN columns. Syntax looks correct.", "action": "execute_query", "query": "SELECT ..."}}
-3. {{"thought": "I have all the required data.", "action": "finish", "data": "Synthesised Markdown tables..."}}
-4. {{"thought": "I've tried 5+ times and the task is genuinely too complex.", "action": "request_subdivision", "failed_query": "...", "intent": "...", "validation_feedback": "..."}}
+3. {{"thought": "The request describes products without exact names.", "action": "semantic_search", "query_description": "weatherproof electrical protection for outdoor connections", "max_rows": 10, "similarity_threshold": 50}}
+4. {{"thought": "I have all the required data.", "action": "finish", "data": "Synthesised Markdown tables..."}}
+5. {{"thought": "I've tried 5+ times and the task is genuinely too complex.", "action": "request_subdivision", "failed_query": "...", "intent": "...", "validation_feedback": "..."}}
 
 Rules:
 - PRE-FLIGHT CHECK: Verify table relationships, JOIN keys, and join cardinality against the schemas before executing SQL.
@@ -44,6 +49,8 @@ Rules:
 - AGGREGATION SAFETY: Ensure each fact row contributes only once to SUM/COUNT calculations unless duplication is explicitly intended. Check for accidental many-to-many joins and inflated totals.
 - COMPARISON CONSISTENCY: When comparing periods, stores, categories, or channels, use identical JOIN paths, grouping dimensions, filters, and metric definitions across all compared datasets. Never compare category-level aggregates against product-type-level aggregates. Prefer a single SQL query with conditional aggregation or GROUP BY period to ensure consistency.
 - Always fetch schemas first.
+- Use semantic_search for vague product descriptions, not ordinary table, metric, or date filtering. After semantic search returns matches, every subsequent SQL query must filter on all returned product_id values.
+- For semantic matches, join the products table and use a predicate such as p.product_id IN (123, 456). If no IDs are returned, do not run follow-up SQL.
 - Use exact column names.
 - NEVER download raw tables. The dataset contains millions of rows.
 - Push all math to the database: SUM, COUNT, GROUP BY, DATE_TRUNC, window functions.
@@ -76,6 +83,42 @@ async def _call_mcp_tool(server_params: StdioServerParameters, tool_name: str, a
                 pass
 
 
+def _extract_product_ids(semantic_output: str) -> list[object]:
+    """Extract deduplicated product IDs from the semantic MCP tool response."""
+    _, separator, payload_text = semantic_output.partition("\n")
+    if not separator:
+        return []
+
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return []
+
+    results = payload.get("results", []) if isinstance(payload, dict) else []
+    product_ids = [
+        result["product_id"]
+        for result in results
+        if isinstance(result, dict) and result.get("product_id") is not None
+    ]
+    return list(dict.fromkeys(product_ids))
+
+
+def _query_includes_product_ids(query: str, product_ids: list[object]) -> bool:
+    """Require every semantic match in a product_id IN predicate."""
+    match = re.search(r"\b(?:\w+\.)?product_id\s+IN\s*\(([^)]*)\)", query, re.IGNORECASE)
+    if not match:
+        return False
+
+    return all(
+        re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(str(product_id))}(?![A-Za-z0-9_-])",
+            match.group(1),
+            re.IGNORECASE,
+        )
+        for product_id in product_ids
+    )
+
+
 async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
     """
     Drive the ReAct loop for one data-retrieval task.
@@ -85,6 +128,10 @@ async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
         command="python",
         args=[_MCP_SCRIPT, "--stdio", f"--RLS_USER_ID={rls_user_id}"],
     )
+    semantic_server_params = StdioServerParameters(
+        command="python",
+        args=[_SEMANTIC_MCP_SCRIPT, "--stdio", f"--RLS_USER_ID={rls_user_id}"],
+    )
     context_block = f"\n\nOVERALL REPORT CONTEXT (for reference only):\n{context}" if context else ""
     system_content = _SYSTEM_PROMPT_TEMPLATE.format(max_iter=SQL_VALIDATION_MAX_ITERATION, context_block=context_block)
 
@@ -93,6 +140,8 @@ async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
         {"role": "user", "content": f"Your specific task:\n{task}"},
     ]
     approved_queries: list[str] = []
+    matched_product_ids: list[object] = []
+    semantic_search_performed = False
 
     for i in range(SQL_VALIDATION_MAX_ITERATION):
         print(f"[DataRetrieveAgent] MCP Loop Iteration {i + 1}/{SQL_VALIDATION_MAX_ITERATION}…")
@@ -135,8 +184,57 @@ async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
                     messages.append({"role": "user", "content": f"Error fetching schemas: {e}"})
             continue
 
+        if action == "semantic_search":
+            query_description = action_json.get("query_description", "").strip()
+            if not query_description:
+                messages.append({"role": "user", "content": "Provide a non-empty query_description for semantic_search."})
+                continue
+
+            arguments = {
+                "query_description": query_description,
+                "max_rows": action_json.get("max_rows", 10),
+                "similarity_threshold": action_json.get("similarity_threshold", 50.0),
+            }
+            try:
+                output = await _call_mcp_tool(semantic_server_params, "semantic_search_products", arguments)
+            except Exception as e:
+                if not any(p in str(e) for p in _PROCESS_ERRORS):
+                    print(f"[DataRetrieveAgent] Semantic MCP error: {e}")
+                    messages.append({"role": "user", "content": f"Error executing semantic search: {e}"})
+                continue
+
+            matched_product_ids = _extract_product_ids(output)
+            semantic_search_performed = True
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"Tool Result (semantic_search):\n{output}\n\n"
+                    f"Matched product IDs: {json.dumps(matched_product_ids)}. "
+                    "Use every matched ID in a product_id IN (...) predicate for subsequent SQL queries. "
+                    "Do not run follow-up SQL if no product IDs were returned."
+                ),
+            })
+            continue
+
         if action == "execute_query":
             query = action_json.get("query", "")
+            if semantic_search_performed and (
+                not matched_product_ids or not _query_includes_product_ids(query, matched_product_ids)
+            ):
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Do not execute this query yet. "
+                        + (
+                            "The semantic search returned no product IDs, so finish with the search result or report no matches."
+                            if not matched_product_ids
+                            else "Filter using product_id IN (...) and include every matched ID: "
+                            f"{json.dumps(matched_product_ids)}. Return a corrected execute_query action."
+                        )
+                    ),
+                })
+                continue
+
             print(f"[DataRetrieveAgent] Executing query: {query[:50]}…")
             try:
                 output = await _call_mcp_tool(server_params, "execute_sales_query", {"postgresql_query": query})
@@ -166,7 +264,7 @@ async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
         # Unknown action
         messages.append({
             "role": "user",
-            "content": f"Unknown action '{action}'. Valid actions: get_schemas, execute_query, request_subdivision, finish.",
+            "content": f"Unknown action '{action}'. Valid actions: get_schemas, semantic_search, execute_query, request_subdivision, finish.",
         })
 
     return {

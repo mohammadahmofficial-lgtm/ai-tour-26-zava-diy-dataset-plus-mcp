@@ -188,6 +188,7 @@ class PostgreSQLCustomerSales:
 
             query = f"""
                 SELECT 
+                    p.product_id,
                     p.product_name,
                     p.product_description,
                     p.base_price as price,
@@ -202,7 +203,7 @@ class PostgreSQLCustomerSales:
                 JOIN {SCHEMA_NAME}.product_types pt ON p.type_id = pt.type_id
                 JOIN {SCHEMA_NAME}.inventory i ON p.product_id = i.product_id
                 WHERE (pde.description_embedding <=> $1::vector) <= $3
-                GROUP BY p.product_name, p.product_description, p.base_price, p.sku, c.category_name, pt.type_name, pde.description_embedding
+                GROUP BY p.product_id, p.product_name, p.product_description, p.base_price, p.sku, c.category_name, pt.type_name, pde.description_embedding
                 ORDER BY pde.description_embedding <=> $1::vector
                 LIMIT $2
             """
