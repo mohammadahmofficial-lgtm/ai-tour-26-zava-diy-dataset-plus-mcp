@@ -36,6 +36,7 @@ POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://store_manager:StoreManage
 
 SCHEMA_NAME = "retail"
 MANAGER_ID = ""
+SUPER_MANAGER_UUID = "00000000-0000-0000-0000-000000000000"
 
 # Constants - table names without schema prefix (will be added in queries)
 CUSTOMERS_TABLE = "customers"
@@ -213,6 +214,20 @@ class PostgreSQLSchemaProvider:
             if conn:
                 await self.release_connection(conn)
 
+    async def _get_accessible_stores(self, conn: asyncpg.Connection, schema_name: str) -> List[str]:
+        """Return store names whose data is visible under the current RLS identity."""
+        rows = await conn.fetch(
+            f"""
+            SELECT store_name
+            FROM {schema_name}.{STORES_TABLE}
+            WHERE current_setting('app.current_rls_user_id', true) = $1
+               OR rls_user_id::text = current_setting('app.current_rls_user_id', true)
+            ORDER BY store_name
+            """,
+            SUPER_MANAGER_UUID,
+        )
+        return [row["store_name"] for row in rows]
+
     def infer_relationship_type(self, references_table: str) -> str:
         """Infer a relationship type based on the referenced table."""
         # Extract just the table name without schema for comparison
@@ -337,6 +352,8 @@ class PostgreSQLSchemaProvider:
                             years = [str(row["year"])
                                      for row in rows if row["year"]]
                             enum_data[key] = years
+                        elif key == "available_stores":
+                            enum_data[key] = await self._get_accessible_stores(conn, schema_name)
                         else:
                             enum_data[key] = await self.fetch_distinct_values(column, qualified_table)
                     except Exception as e:
@@ -631,6 +648,8 @@ class PostgreSQLSchemaProvider:
                         years = [str(row["year"])
                                  for row in rows if row["year"]]
                         enum_data[key] = years
+                    elif key == "available_stores":
+                        enum_data[key] = await self._get_accessible_stores(conn, schema_name)
                     else:
                         # Use existing connection for fetch_distinct_values-like operation
                         rows = await conn.fetch(

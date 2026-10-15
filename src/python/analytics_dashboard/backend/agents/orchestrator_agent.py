@@ -5,16 +5,15 @@ Pipeline:
   0. Fetch DB metadata (schemas + RLS-visible stores).
   1. Generate a report outline from the metadata.
   2. Derive per-section data requirements.
-  3. Run a parallel swarm of Data Retrieve Agents (with recursive subdivision).
+  3. Run result-driven rounds of Data Retrieve Agents (with recursive subdivision).
   4. Build dashboard tiles from the aggregated data.
   5. Audit and write the final report to disk.
 """
 import asyncio
 import json
-import concurrent.futures
 
 from .config import MAX_REPORT_SECTIONS
-from .data_retrieve_agent import fetch_metadata, run_mcp_loop
+from .data_retrieve_agent import PERMISSION_DENIED_MESSAGE, fetch_metadata, run_mcp_loop
 from .analytics_agent import build_dashboard
 from .write_report_agent import finalize_and_save
 from .security_agent import scan_initial_prompt
@@ -23,6 +22,40 @@ from .llm_client import call_llm
 
 _MAX_SUBDIVISION_DEPTH = 2
 _MAX_SWARM_TASKS = 4
+_MAX_INVESTIGATION_ROUNDS = 3
+
+
+def _build_permission_denied_message(
+    requested_inaccessible_stores: list[str],
+    accessible_store_names: list[str],
+) -> str:
+    """
+    Build a clear, user-facing message explaining which store(s) the user
+    lacks access to, and which stores they CAN access.
+    """
+    if not accessible_store_names:
+        message = (
+            "Your account does not have access to any store data. "
+            "Report generation was stopped before any queries were run."
+        )
+    elif requested_inaccessible_stores:
+        store_list = ", ".join(f"'{store}'" for store in requested_inaccessible_stores)
+        message = (
+            f"You do not have access to {store_list}. "
+            "Report generation was stopped before any queries were run."
+        )
+    else:
+        message = (
+            "Your request is outside the stores you can access. "
+            "Report generation was stopped before any queries were run."
+        )
+
+    if accessible_store_names:
+        accessible_list = ", ".join(f"'{store}'" for store in accessible_store_names)
+        message += f" You can generate reports for: {accessible_list}."
+
+    message += " Please choose a store you can access or contact your administrator."
+    return message
 
 
 # ── Outline / planning helpers ─────────────────────────────────────────────────
@@ -77,21 +110,100 @@ def generate_data_requirements(original_prompt: str, outline: dict) -> str:
     return call_llm(messages, json_mode=True)
 
 
-def plan_data_tasks(requirements_json: str) -> list[str]:
-    """Break data requirements into up to _MAX_SWARM_TASKS parallel retrieval tasks."""
+def plan_data_tasks(
+    original_prompt: str,
+    requirements_json: str,
+    previous_findings: str = "",
+    completed_tasks: list[str] | None = None,
+    accessible_stores: list[str] | None = None,
+) -> dict:
+    """Choose the next bounded set of retrieval tasks from current evidence."""
+    completed_tasks = completed_tasks or []
+    store_scope = (
+        f"Authorized stores for this user: {', '.join(accessible_stores)}. "
+        "Do not plan or request data for any other store."
+        if accessible_stores is not None
+        else ""
+    )
     messages = [
         {
             "role": "system",
             "content": (
-                f"You are a Data Task Planner. Break the DATA REQUIREMENTS into up to {_MAX_SWARM_TASKS} independent "
-                "retrieval tasks that SQL agents can run in parallel (e.g. one per year or per metric). "
-                f"Return strict JSON: {{'tasks': ['Task 1', 'Task 2']}}. Maximum {_MAX_SWARM_TASKS} tasks."
+                "You are the adaptive investigation planner for a retail analytics agent. "
+                "Plan an initial broad baseline investigation when no findings are available. "
+                "For later rounds, use the returned findings to choose the most useful next analyses "
+                "and address the largest remaining evidence gaps. Select only analyses supported by "
+                "the database requirements and available evidence; do not claim causes that the data "
+                "cannot establish. Tasks in the same round must be independent and may run in parallel. "
+                "Do not repeat completed tasks. Return strict JSON in exactly this shape: "
+                '{"investigation_complete": false, "tasks": ["concrete retrieval task"]}. '
+                "The value of 'investigation_complete' must be a boolean and 'tasks' must always be "
+                "an array of non-empty strings. Set investigation_complete=true only when the evidence "
+                "is sufficient to answer the user, and then return an empty tasks array. Otherwise return "
+                "at least one concrete retrieval task. "
+                f"Return at most {_MAX_SWARM_TASKS} tasks."
             ),
         },
-        {"role": "user", "content": f"Requirements:\n{requirements_json}"},
+        {
+            "role": "user",
+            "content": (
+                f"User request:\n{original_prompt}\n\n"
+                f"Data requirements:\n{requirements_json}\n\n"
+                f"Completed tasks:\n{json.dumps(completed_tasks)}\n\n"
+                f"Findings from previous rounds:\n{previous_findings or '(none; plan the baseline investigation)'}\n\n"
+                f"{store_scope}"
+            ),
+        },
     ]
-    result = _llm_json(messages, {"tasks": [requirements_json]})
-    return result.get("tasks", [requirements_json])[:_MAX_SWARM_TASKS]
+
+    for attempt in range(2):
+        response = call_llm(messages, json_mode=True)
+        try:
+            result = json.loads(response)
+            if not isinstance(result, dict) or not isinstance(result.get("investigation_complete"), bool):
+                raise ValueError("Adaptive investigation planner omitted a boolean investigation_complete value.")
+
+            tasks = result.get("tasks")
+            if not isinstance(tasks, list) or any(not isinstance(task, str) or not task.strip() for task in tasks):
+                raise ValueError("Adaptive investigation planner must return a tasks array of non-empty strings.")
+            if len(tasks) > _MAX_SWARM_TASKS:
+                raise ValueError(f"Adaptive investigation planner returned more than {_MAX_SWARM_TASKS} tasks.")
+            if result["investigation_complete"] and tasks:
+                raise ValueError("Completed investigation plans must not contain more tasks.")
+            if not result["investigation_complete"] and not tasks:
+                raise ValueError("Incomplete investigation plans must include at least one task.")
+
+            completed_task_keys = {task.strip().casefold() for task in completed_tasks}
+            task_keys = [task.strip().casefold() for task in tasks]
+            if len(task_keys) != len(set(task_keys)) or any(key in completed_task_keys for key in task_keys):
+                raise ValueError("Adaptive investigation planner returned a duplicate task.")
+
+            return {"investigation_complete": result["investigation_complete"], "tasks": tasks}
+        except json.JSONDecodeError as exc:
+            if attempt == 1:
+                raise ValueError("Adaptive investigation planner returned invalid JSON.") from exc
+            validation_error = ValueError("Adaptive investigation planner returned invalid JSON.")
+        except ValueError as exc:
+            validation_error = exc
+
+        if attempt == 1:
+            raise validation_error
+
+        messages.extend(
+            [
+                {"role": "assistant", "content": response},
+                {
+                    "role": "user",
+                    "content": (
+                        f"The previous response failed validation: {validation_error}. "
+                        "Return a corrected JSON object with a boolean 'investigation_complete' and "
+                        "'tasks' as an array of non-empty strings. If investigation_complete is true, "
+                        "tasks must be empty; otherwise tasks must contain at least one concrete task. "
+                        f"Return no more than {_MAX_SWARM_TASKS} tasks."
+                    ),
+                },
+            ]
+        )
 
 
 def _subdivide_task(task_desc: str, details: dict) -> list[str]:
@@ -128,7 +240,7 @@ async def _process_task(task_desc: str, rls_user_id: str, context: str, depth: i
     if not isinstance(res, dict):
         return {"data": str(res), "queries": []}
 
-    if res.get("status") == "success":
+    if res.get("status") in ("success", "permission_denied"):
         return res
 
     if res.get("status") == "subdivide":
@@ -144,13 +256,19 @@ async def _process_task(task_desc: str, rls_user_id: str, context: str, depth: i
         )
         combined_data = f"--- ASSEMBLED RESULTS FOR TASK {agent_id} ---\n"
         combined_queries: list[str] = []
+        permission_denied = False
         for sr in sub_results:
             if isinstance(sr, Exception):
                 combined_data += f"Sub-task failed: {sr}\n"
             elif isinstance(sr, dict):
                 combined_data += f"{sr.get('data', '')}\n"
                 combined_queries.extend(sr.get("queries", []))
-        return {"data": combined_data, "queries": combined_queries}
+                permission_denied = permission_denied or sr.get("status") == "permission_denied"
+        return {
+            "status": "permission_denied" if permission_denied else "success",
+            "data": PERMISSION_DENIED_MESSAGE if permission_denied else combined_data,
+            "queries": combined_queries,
+        }
 
     # status == "error" or unexpected
     return {"data": res.get("data", ""), "queries": res.get("queries", [])}
@@ -161,6 +279,74 @@ async def _run_swarm(tasks: list[str], rls_user_id: str, context: str) -> list:
         *[_process_task(t, rls_user_id, context, 0, str(i + 1)) for i, t in enumerate(tasks)],
         return_exceptions=True,
     )
+
+
+async def _run_adaptive_investigation(
+    original_prompt: str,
+    requirements_json: str,
+    rls_user_id: str,
+    accessible_stores: list[str] | None = None,
+) -> dict:
+    """Collect evidence in bounded rounds, choosing each follow-up after prior results."""
+    findings: list[str] = []
+    completed_tasks: list[str] = []
+    all_queries: list[str] = []
+
+    for round_number in range(1, _MAX_INVESTIGATION_ROUNDS + 1):
+        planner_options = {}
+        if accessible_stores is not None:
+            planner_options["accessible_stores"] = accessible_stores
+        plan = plan_data_tasks(
+            original_prompt,
+            requirements_json,
+            previous_findings="\n\n".join(findings),
+            completed_tasks=completed_tasks,
+            **planner_options,
+        )
+        if plan["investigation_complete"]:
+            print(f"[Orchestrator] Investigation planner found evidence sufficient after {round_number - 1} round(s).")
+            break
+
+        tasks = plan["tasks"]
+        print(
+            f"[Orchestrator] Investigation round {round_number}/{_MAX_INVESTIGATION_ROUNDS}: "
+            f"{len(tasks)} parallel task(s)."
+        )
+        task_context = requirements_json
+        if accessible_stores is not None:
+            task_context += (
+                "\n\nAUTHORIZED STORES FOR THIS USER: "
+                f"{', '.join(accessible_stores) or '(none)'}. "
+                "Do not query other stores."
+            )
+        results = await _run_swarm(tasks, rls_user_id, task_context)
+
+        permission_denied = False
+        for task, result in zip(tasks, results):
+            completed_tasks.append(task)
+            if isinstance(result, Exception):
+                findings.append(f"Task: {task}\nResult: Retrieval failed: {result}")
+            elif isinstance(result, dict):
+                findings.append(f"Task: {task}\nResult:\n{result.get('data', '')}")
+                all_queries.extend(result.get("queries", []))
+                permission_denied = permission_denied or result.get("status") == "permission_denied"
+            else:
+                findings.append(f"Task: {task}\nResult:\n{result}")
+
+        if permission_denied:
+            return {
+                "error": PERMISSION_DENIED_MESSAGE,
+                "data": "\n\n".join(findings),
+                "queries": all_queries,
+            }
+
+    else:
+        findings.append(
+            f"Investigation stopped after reaching the configured limit of "
+            f"{_MAX_INVESTIGATION_ROUNDS} rounds; conclusions must use only evidence collected."
+        )
+
+    return {"data": "\n\n".join(findings), "queries": all_queries}
 
 
 # ── Public entry points ────────────────────────────────────────────────────────
@@ -192,7 +378,38 @@ def run_generation_pipeline(messages: list[dict], persona_name: str, user_id: st
 
     # ── 0: DB Metadata ──
     print("[Orchestrator] Fetching DB metadata…")
-    db_metadata = fetch_metadata(user_id)
+    try:
+        db_metadata, all_store_names, accessible_store_names = fetch_metadata(user_id)
+    except Exception as exc:
+        print(f"[Orchestrator] Unable to verify store permissions: {exc}")
+        return {
+            "error": (
+                "We could not verify your store permissions, so no report queries were run. "
+                "Please try again or contact your administrator."
+            )
+        }
+
+    accessible_store_set = {store.casefold() for store in accessible_store_names}
+    prompt_lower = original_prompt.casefold()
+
+    def _store_referenced(store: str) -> bool:
+        """Check whether the user's prompt references a store, matching both the
+        full name ('Zava Retail Seattle') and the short name ('Seattle')."""
+        store_lower = store.casefold()
+        if store_lower in prompt_lower:
+            return True
+        # Match the short store name (e.g. 'Seattle' from 'Zava Retail Seattle')
+        short_name = store_lower.removeprefix("zava retail ").strip()
+        return bool(short_name) and short_name in prompt_lower
+
+    requested_inaccessible_stores = [
+        store
+        for store in all_store_names
+        if store.casefold() not in accessible_store_set and _store_referenced(store)
+    ]
+    if (all_store_names and not accessible_store_names) or requested_inaccessible_stores:
+        print("[Orchestrator] Requested data is outside the user's store permissions; stopping before report queries.")
+        return {"error": _build_permission_denied_message(requested_inaccessible_stores, accessible_store_names)}
 
     # ── 1: Outline ──
     print("[Orchestrator] Generating report outline…")
@@ -203,25 +420,25 @@ def run_generation_pipeline(messages: list[dict], persona_name: str, user_id: st
     print("[Orchestrator] Extracting data requirements…")
     data_requirements = generate_data_requirements(original_prompt, outline)
 
-    # ── 3: Parallel data retrieval swarm ──
-    tasks = plan_data_tasks(data_requirements)
-    print(f"[Orchestrator] Swarm: {len(tasks)} parallel tasks.")
+    # ── 3: Result-driven data investigation ──
+    try:
+        investigation = asyncio.run(
+            _run_adaptive_investigation(
+                original_prompt,
+                data_requirements,
+                user_id,
+                accessible_stores=accessible_store_names,
+            )
+        )
+    except Exception as exc:
+        print(f"[Orchestrator] Adaptive investigation failed: {exc}")
+        return {"error": f"Adaptive investigation failed: {exc}"}
 
-    results = asyncio.run(_run_swarm(tasks, user_id, data_requirements))
-
-    data_pieces: list[str] = []
-    all_queries: list[str] = []
-    for res in results:
-        if isinstance(res, Exception):
-            print(f"[Orchestrator] Swarm agent failed: {res}")
-        elif isinstance(res, dict):
-            data_pieces.append(f"--- SWARM AGENT RESULTS ---\n{res.get('data', '')}")
-            all_queries.extend(res.get("queries", []))
-        else:
-            data_pieces.append(f"--- SWARM AGENT RESULTS ---\n{res}")
-
-    raw_data = "\n\n".join(data_pieces)
-    print(f"[Orchestrator] ✓ Swarm complete. {len(all_queries)} queries executed.")
+    raw_data = investigation["data"]
+    all_queries = investigation["queries"]
+    if "error" in investigation:
+        return {"error": investigation["error"]}
+    print(f"[Orchestrator] ✓ Investigation complete. {len(all_queries)} queries executed.")
 
     # ── 4: Dashboard tiles ──
     print("[Orchestrator] Building dashboard tiles…")
