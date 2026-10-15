@@ -139,7 +139,8 @@ Edit `run_generation_pipeline` in [orchestrator_agent.py](backend/agents/orchest
 ## 5. Security Invariants (do not break)
 
 - The Security Agent gates input before anything else runs, and audits again before writing.
-- RLS: the user id is passed to the MCP server with `--RLS_USER_ID=...`; PostgreSQL enforces row visibility. Empty or single-store results are **valid**, so never treat them as errors.
+- RLS: the user id is passed to the MCP server with `--RLS_USER_ID=...`; PostgreSQL enforces row visibility. Store metadata shown to the planner/retriever is limited to stores assigned to that user, and an explicitly requested inaccessible store is rejected before report queries start.
+- If PostgreSQL returns an explicit permission-denied error, stop that retrieval task and the remaining investigation rounds; the chat displays the access message. Empty or single-store query results are **valid**, so never treat them as permission errors.
 - Never build SQL from the user's raw text outside the LLM/MCP path.
 
 ---
