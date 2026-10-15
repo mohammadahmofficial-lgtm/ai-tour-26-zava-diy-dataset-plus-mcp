@@ -3,137 +3,495 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zava Demo - Dashboard</title>
+    <title>Zava Analytics — Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <style>
+        :root {
+            --zava-primary: #4f46e5;
+            --zava-primary-dark: #4338ca;
+            --zava-accent: #7c3aed;
+            --zava-sidebar: #1e1b4b;
+            --zava-sidebar-hover: #312e81;
+        }
+        body {
+            background: #f1f5f9;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        /* Sidebar */
+        .sidebar {
+            background: linear-gradient(180deg, var(--zava-sidebar) 0%, #312e81 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 0;
+            flex: 0 0 280px;
+            width: 280px;
+            display: flex;
+            flex-direction: column;
+        }
+        .main-content {
+            flex: 1 1 auto;
+            min-width: 0;
+            padding: 2rem 2.5rem;
+        }
+        .dashboard-row {
+            display: flex;
+            align-items: stretch;
+        }
+        @media (max-width: 768px) {
+            .dashboard-row {
+                flex-direction: column;
+            }
+            .sidebar {
+                flex: 0 0 auto;
+                width: 100%;
+                min-height: auto;
+            }
+            .main-content {
+                padding: 1.5rem;
+            }
+        }
+        .sidebar-brand {
+            padding: 1.5rem 1.25rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sidebar-brand .brand-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .sidebar-brand h5 {
+            margin: 0;
+            font-weight: 700;
+        }
+        .sidebar-brand small {
+            color: #a5b4fc;
+            font-size: 0.7rem;
+        }
+        .user-card {
+            margin: 1rem 1.25rem;
+            padding: 0.9rem 1rem;
+            background: rgba(255,255,255,0.08);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .user-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+        .user-card .user-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            line-height: 1.2;
+        }
+        .user-card .user-role {
+            color: #a5b4fc;
+            font-size: 0.72rem;
+        }
+        .sidebar-section-title {
+            padding: 0.75rem 1.25rem 0.4rem;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #818cf8;
+            font-weight: 700;
+        }
+        .report-list {
+            padding: 0 0.75rem;
+            max-height: calc(100vh - 420px);
+            overflow-y: auto;
+        }
+        .report-list::-webkit-scrollbar { width: 5px; }
+        .report-list::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 3px; }
+        .report-item {
+            display: block;
+            padding: 0.7rem 0.9rem;
+            border-radius: 10px;
+            color: #e0e7ff;
+            text-decoration: none;
+            transition: all 0.15s;
+            margin-bottom: 4px;
+            border: 1px solid transparent;
+        }
+        .report-item:hover {
+            background: var(--zava-sidebar-hover);
+            color: white;
+        }
+        .report-item.active {
+            background: rgba(99, 102, 241, 0.35);
+            border-color: rgba(129, 140, 248, 0.4);
+            color: white;
+        }
+        .report-item .report-title {
+            font-size: 0.82rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .report-item .report-time {
+            font-size: 0.7rem;
+            color: #a5b4fc;
+        }
         .generating-placeholder {
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px dashed rgba(129, 140, 248, 0.5);
+            border-radius: 10px;
+            padding: 0.8rem 0.9rem;
+            margin-bottom: 4px;
             animation: pulse 1.5s ease-in-out infinite;
         }
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50% { opacity: 0.6; }
         }
+        .btn-new-report {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.2s;
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+        }
+        .btn-new-report:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 24px rgba(99, 102, 241, 0.45);
+            color: white;
+        }
+        .btn-new-report:disabled {
+            opacity: 0.7;
+        }
+        /* Main content */
+        .main-content {
+            padding: 2rem 2.5rem;
+        }
+        .report-header {
+            background: white;
+            border-radius: 16px;
+            padding: 1.75rem 2rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+        }
+        .report-header h3 {
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+        .report-header p {
+            color: #64748b;
+            margin: 0;
+            max-width: 700px;
+        }
+        .report-header .report-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .report-meta .meta-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f1f5f9;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 0.78rem;
+            color: #475569;
+            font-weight: 500;
+        }
+        .component-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .component-card .text-content {
+            color: #334155;
+            line-height: 1.7;
+            font-size: 0.95rem;
+        }
+        .component-card .text-content h1, .component-card .text-content h2, .component-card .text-content h3 {
+            color: #1e293b;
+            font-weight: 700;
+            margin-top: 1rem;
+        }
+        .component-card .text-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        .component-card .text-content th, .component-card .text-content td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .component-card .text-content th {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+        .empty-state {
+            background: white;
+            border-radius: 16px;
+            border: 2px dashed #cbd5e1;
+            padding: 4rem 2rem;
+            text-align: center;
+            color: #94a3b8;
+        }
+        .empty-state .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #c7d2fe;
+        }
+        .empty-state h4 {
+            color: #64748b;
+            font-weight: 600;
+        }
+        /* Chat modal */
+        .chat-log {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 1rem;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .chat-msg {
+            margin-bottom: 0.9rem;
+        }
+        .chat-msg .msg-badge {
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 4px;
+        }
+        .chat-msg.user .msg-badge { background: #eef2ff; color: var(--zava-primary-dark); }
+        .chat-msg.agent .msg-badge { background: #ecfdf5; color: #059669; }
+        .chat-msg .msg-bubble {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            color: #334155;
+            display: inline-block;
+            max-width: 85%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .chat-msg.user { text-align: right; }
+        .chat-msg.user .msg-bubble { background: #eef2ff; border-color: #c7d2fe; }
+        .modal-content {
+            border-radius: 16px;
+            border: none;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        .modal-header {
+            background: linear-gradient(135deg, var(--zava-primary), var(--zava-accent));
+            border-radius: 16px 16px 0 0;
+            padding: 1.25rem 1.5rem;
+        }
+        .modal-header .modal-title {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .prompt-input {
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            resize: none;
+        }
+        .prompt-input:focus {
+            border-color: var(--zava-primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .btn-send {
+            background: linear-gradient(135deg, var(--zava-primary), var(--zava-accent));
+            border: none;
+            border-radius: 12px;
+            padding: 12px;
+            font-weight: 600;
+            color: white;
+        }
+        .btn-send:hover:not(:disabled) { color: white; transform: translateY(-1px); }
+        .btn-send:disabled { opacity: 0.6; }
+        .suggestion-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .chip {
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            color: var(--zava-primary-dark);
+            border-radius: 20px;
+            padding: 5px 14px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .chip:hover {
+            background: var(--zava-primary);
+            color: white;
+            border-color: var(--zava-primary);
+        }
+        .table-report th { background: #1e1b4b; color: white; font-weight: 600; }
+        .table-report td { vertical-align: middle; }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="/dashboard">Zava Analytics</a>
-            <div class="d-flex text-white align-items-center">
-                <span class="me-3">Logged in as: <strong>{{ user_name }}</strong></span>
-                <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mt-4">
-        <div class="row">
+    <div class="container-fluid p-0">
+        <div class="dashboard-row">
             <!-- Sidebar -->
-            <div class="col-md-3">
-                <!-- New Report Button -->
-                <button class="btn btn-primary w-100 mb-3 fw-bold shadow-sm" id="newReportBtn" data-bs-toggle="modal" data-bs-target="#newReportModal">
-                    <span id="newReportBtnText">+ New Report</span>
+            <div class="sidebar">
+                <div class="sidebar-brand">
+                    <div class="brand-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                    <div>
+                        <h5>Zava Analytics</h5>
+                        <small>Agentic Insights</small>
+                    </div>
+                </div>
+
+                <div class="user-card">
+                    <div class="user-avatar">{{ user_name[0] }}</div>
+                    <div>
+                        <div class="user-name">{{ user_name }}</div>
+                        <div class="user-role">Store Manager</div>
+                    </div>
+                </div>
+
+                <button class="btn btn-new-report w-100" id="newReportBtn" data-bs-toggle="modal" data-bs-target="#newReportModal">
+                    <span id="newReportBtnText"><i class="bi bi-plus-lg me-2"></i>New Report</span>
                     <span id="newReportSpinner" class="d-none">
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        Generating Report...
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Generating...
                     </span>
                 </button>
 
-                <!-- Report History -->
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-white fw-bold">Report History</div>
-                    <ul class="list-group list-group-flush" id="reportList">
-                        <!-- Generating placeholder (hidden by default) -->
-                        <li class="list-group-item generating-placeholder d-none" id="generatingPlaceholder">
-                            <div class="d-flex align-items-center">
-                                <span class="spinner-border spinner-border-sm text-primary me-2" role="status"></span>
-                                <div>
-                                    <div class="small fw-bold text-primary">Generating new report...</div>
-                                    <div class="text-muted" style="font-size: 0.75rem;">Agents are working on it</div>
-                                </div>
+                <div class="sidebar-section-title">Report History</div>
+                <div class="report-list" id="reportList">
+                    <div class="generating-placeholder d-none" id="generatingPlaceholder">
+                        <div class="d-flex align-items-center">
+                            <span class="spinner-border spinner-border-sm text-light me-2" role="status"></span>
+                            <div>
+                                <div class="small fw-bold text-white">Generating new report...</div>
+                                <div style="font-size: 0.7rem; color: #a5b4fc;">Agents are working on it</div>
                             </div>
-                        </li>
-                        {% for r in reports %}
-                        <a href="/dashboard?report_id={{ r.id }}" class="list-group-item list-group-item-action {% if current_report and r.id == current_report.report_id %}active{% endif %}">
-                            <div class="small fw-bold text-truncate" title="{{ r.title }}">{{ r.title }}</div>
-                            <div class="text-muted" style="font-size: 0.75rem;">{{ r.timestamp }}</div>
-                        </a>
-                        {% else %}
-                        <li class="list-group-item text-muted small" id="noReportsPlaceholder">No past reports</li>
-                        {% endfor %}
-                    </ul>
+                        </div>
+                    </div>
+                    {% for r in reports %}
+                    <a href="/dashboard?report_id={{ r.id }}" class="report-item {% if current_report and r.id == current_report.report_id %}active{% endif %}">
+                        <div class="report-title" title="{{ r.title }}">{{ r.title }}</div>
+                        <div class="report-time"><i class="bi bi-clock me-1"></i>{{ r.timestamp }}</div>
+                    </a>
+                    {% else %}
+                    <div class="text-center text-muted small py-3" id="noReportsPlaceholder" style="color: #a5b4fc !important;">No past reports yet</div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-auto p-3" style="margin-top: auto;">
+                    <a href="/logout" class="btn btn-outline-light btn-sm w-100" style="border-radius: 10px;">
+                        <i class="bi bi-box-arrow-right me-2"></i>Logout
+                    </a>
                 </div>
             </div>
 
-            <!-- Main Dashboard Area -->
-            <div class="col-md-9">
+            <!-- Main Content -->
+            <div class="main-content">
                 {% if current_report %}
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-body bg-light rounded text-center py-4">
-                        <h4 class="mb-2 fw-bold text-primary">{{ current_report.title or 'Analytics Report' }}</h4>
-                        <p class="text-muted mb-0 mx-auto" style="max-width: 600px;">{{ current_report.summary or current_report.prompt }}</p>
+                <div class="report-header">
+                    <h3><i class="bi bi-file-earmark-text me-2 text-primary"></i>{{ current_report.title or 'Analytics Report' }}</h3>
+                    <p>{{ current_report.summary or current_report.prompt }}</p>
+                    <div class="report-meta">
+                        <span class="meta-item"><i class="bi bi-person"></i>{{ user_name }}</span>
+                        <span class="meta-item"><i class="bi bi-clock"></i>{{ current_report.timestamp or 'Generated' }}</span>
+                        <span class="meta-item"><i class="bi bi-robot"></i>Agent Generated</span>
                     </div>
                 </div>
-                
-                <div class="card shadow-sm border-0">
-                    <div class="card-body">
-                        <div class="mt-2">
-                            {% for component in current_report.components %}
-                                {% if component.type == 'text' %}
-                                    <div class="mb-4">
-                                        {{ component.content | safe }}
-                                    </div>
-                                {% elif component.type == 'chart' %}
-                                    <div class="mb-4 bg-white p-3 border rounded shadow-sm">
-                                        <div style="position: relative; min-height: 420px; width: 100%;">
-                                            <canvas id="chart_{{ loop.index }}"></canvas>
-                                        </div>
-                                    </div>
-                                    <script>
-                                        document.addEventListener('DOMContentLoaded', function() {
-                                            const ctx = document.getElementById('chart_{{ loop.index }}').getContext('2d');
-                                            const chartConfig = {{ component.data | tojson | safe }};
-                                            // Ensure charts are always readable — override any smushed aspect ratio
-                                            if (!chartConfig.options) chartConfig.options = {};
-                                            chartConfig.options.maintainAspectRatio = false;
-                                            if (!chartConfig.options.plugins) chartConfig.options.plugins = {};
-                                            if (!chartConfig.options.plugins.legend) chartConfig.options.plugins.legend = {};
-                                            chartConfig.options.plugins.legend.position = chartConfig.options.plugins.legend.position || 'top';
-                                            new Chart(ctx, chartConfig);
-                                        });
-                                    </script>
-                                {% elif component.type == 'table' %}
-                                    <div class="table-responsive mb-4">
-                                        <table class="table table-striped table-hover border">
-                                            <thead class="table-dark">
-                                                <tr>
-                                                    {% for header in component.data.headers %}
-                                                    <th>{{ header }}</th>
-                                                    {% endfor %}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for row in component.data.rows %}
-                                                <tr>
-                                                    {% for cell in row %}
-                                                    <td>{{ cell }}</td>
-                                                    {% endfor %}
-                                                </tr>
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                {% endif %}
-                            {% endfor %}
+
+                {% for component in current_report.components %}
+                    {% if component.type == 'text' %}
+                    <div class="component-card">
+                        <div class="text-content">{{ component.content | safe }}</div>
+                    </div>
+                    {% elif component.type == 'chart' %}
+                    <div class="component-card">
+                        <div style="position: relative; min-height: 420px; width: 100%;">
+                            <canvas id="chart_{{ loop.index }}"></canvas>
                         </div>
                     </div>
-                </div>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const ctx = document.getElementById('chart_{{ loop.index }}').getContext('2d');
+                            const chartConfig = {{ component.data | tojson | safe }};
+                            if (!chartConfig.options) chartConfig.options = {};
+                            chartConfig.options.maintainAspectRatio = false;
+                            if (!chartConfig.options.plugins) chartConfig.options.plugins = {};
+                            if (!chartConfig.options.plugins.legend) chartConfig.options.plugins.legend = {};
+                            chartConfig.options.plugins.legend.position = chartConfig.options.plugins.legend.position || 'top';
+                            new Chart(ctx, chartConfig);
+                        });
+                    </script>
+                    {% elif component.type == 'table' %}
+                    <div class="component-card">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-report mb-0">
+                                <thead>
+                                    <tr>
+                                        {% for header in component.data.headers %}
+                                        <th>{{ header }}</th>
+                                        {% endfor %}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in component.data.rows %}
+                                    <tr>
+                                        {% for cell in row %}
+                                        <td>{{ cell }}</td>
+                                        {% endfor %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
                 {% else %}
-                <div class="text-center p-5 bg-light rounded border-0 shadow-sm text-muted">
-                    <h4 class="fw-bold">No Report Selected</h4>
-                    <p>Click "+ New Report" to ask the agent for analytics, or select a report from the history.</p>
+                <div class="empty-state">
+                    <div class="empty-icon"><i class="bi bi-clipboard-data"></i></div>
+                    <h4>No Report Selected</h4>
+                    <p class="mb-3">Ask the agent for analytics insights, or select a report from history.</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newReportModal" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border: none; border-radius: 10px; padding: 10px 24px; font-weight: 600;">
+                        <i class="bi bi-plus-lg me-2"></i>Create Your First Report
+                    </button>
                 </div>
                 {% endif %}
             </div>
@@ -143,18 +501,26 @@
     <!-- New Report Modal -->
     <div class="modal fade" id="newReportModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content border-0 shadow">
-          <div class="modal-header bg-primary text-white">
-            <h5 class="modal-title fw-bold">Agentic Report Generation</h5>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title text-white"><i class="bi bi-stars"></i> Agentic Report Generation</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body p-0 d-flex flex-column" style="height: 50vh;">
-              <div class="p-3 overflow-auto flex-grow-1" id="chatLog" style="background-color: #f8f9fa;">
+          <div class="modal-body p-3 d-flex flex-column" style="height: 55vh;">
+              <div class="suggestion-chips">
+                  <button class="chip" onclick="useSuggestion(this)">Sales dip in 2023</button>
+                  <button class="chip" onclick="useSuggestion(this)">Top products by revenue</button>
+                  <button class="chip" onclick="useSuggestion(this)">Monthly sales trend</button>
+                  <button class="chip" onclick="useSuggestion(this)">Inventory vs demand</button>
+              </div>
+              <div class="chat-log" id="chatLog">
                   <div class="text-muted small mb-3 text-center">Describe the insights you need. The agent may ask clarifying questions.</div>
               </div>
-              <div class="p-3 bg-white border-top">
-                  <textarea id="promptInput" class="form-control mb-2 shadow-sm" rows="2" placeholder="E.g., Show me the sales dip in 2023..."></textarea>
-                  <button id="generateBtn" class="btn btn-primary w-100 fw-bold shadow-sm" onclick="generateReport()">Send to Agent</button>
+              <div class="pt-3">
+                  <textarea id="promptInput" class="form-control prompt-input mb-2" rows="2" placeholder="E.g., Show me the sales dip in 2023..."></textarea>
+                  <button id="generateBtn" class="btn btn-send w-100" onclick="generateReport()">
+                      <i class="bi bi-send me-2"></i>Send to Agent
+                  </button>
               </div>
           </div>
         </div>
@@ -163,33 +529,35 @@
 
     <script>
         let chatHistory = [];
+        let startNewConversationOnNextPrompt = false;
+
+        function useSuggestion(el) {
+            document.getElementById('promptInput').value = el.textContent.trim();
+            document.getElementById('promptInput').focus();
+        }
 
         function appendMessage(role, text) {
             const chatLog = document.getElementById('chatLog');
             const msgDiv = document.createElement('div');
-            msgDiv.className = role === 'User' ? 'mb-3 text-end' : 'mb-3 text-start';
-            
-            const badgeClass = role === 'User' ? 'bg-primary' : 'bg-success';
-            msgDiv.innerHTML = `<span class="badge ${badgeClass} mb-1 shadow-sm">${role}</span><div class="p-2 rounded bg-white border shadow-sm d-inline-block text-start" style="max-width: 85%; font-size: 0.95rem;">${text}</div>`;
-            
+            msgDiv.className = `chat-msg ${role === 'User' ? 'user' : 'agent'}`;
+            const badge = document.createElement('span');
+            badge.className = 'msg-badge';
+            badge.textContent = role;
+            const message = document.createElement('div');
+            message.className = 'msg-bubble';
+            message.textContent = text;
+            msgDiv.append(badge, document.createElement('br'), message);
             chatLog.appendChild(msgDiv);
             chatLog.scrollTop = chatLog.scrollHeight;
-            
             chatHistory.push({role: role, content: text});
         }
 
         function showGeneratingState() {
-            // Close the modal
             const modal = bootstrap.Modal.getInstance(document.getElementById('newReportModal'));
             if (modal) modal.hide();
-            
-            // Show spinner in the + New Report button
             document.getElementById('newReportBtnText').classList.add('d-none');
             document.getElementById('newReportSpinner').classList.remove('d-none');
             document.getElementById('newReportBtn').disabled = true;
-            document.getElementById('newReportBtn').classList.replace('btn-primary', 'btn-warning');
-            
-            // Show the generating placeholder in Report History
             document.getElementById('generatingPlaceholder').classList.remove('d-none');
             const noReports = document.getElementById('noReportsPlaceholder');
             if (noReports) noReports.classList.add('d-none');
@@ -199,7 +567,6 @@
             document.getElementById('newReportBtnText').classList.remove('d-none');
             document.getElementById('newReportSpinner').classList.add('d-none');
             document.getElementById('newReportBtn').disabled = false;
-            document.getElementById('newReportBtn').classList.replace('btn-warning', 'btn-primary');
             document.getElementById('generatingPlaceholder').classList.add('d-none');
         }
 
@@ -208,12 +575,16 @@
             const promptText = promptInput.value.trim();
             if (!promptText) return;
 
+            if (startNewConversationOnNextPrompt) {
+                chatHistory = [];
+                startNewConversationOnNextPrompt = false;
+            }
             appendMessage('User', promptText);
             promptInput.value = '';
 
             const btn = document.getElementById('generateBtn');
             btn.disabled = true;
-            
+
             fetch('/generate_report', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -223,11 +594,9 @@
             .then(result => {
                 const data = result.body;
                 if (result.status === 400 && data.error) {
-                    // Agent requested clarification or security rejected
                     appendMessage('Agent', data.error);
                     btn.disabled = false;
                 } else if (data.task_id) {
-                    // Prompt accepted — close modal and start polling
                     appendMessage('Agent', data.message);
                     showGeneratingState();
                     pollStatus(data.task_id);
@@ -253,7 +622,10 @@
                     window.location.href = '/dashboard?report_id=' + data.report_id;
                 } else if (data.error) {
                     hideGeneratingState();
-                    alert('Pipeline Error: ' + data.error);
+                    appendMessage('Agent', data.error);
+                    startNewConversationOnNextPrompt = true;
+                    document.getElementById('generateBtn').disabled = false;
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('newReportModal')).show();
                 }
             })
             .catch(err => {
@@ -261,6 +633,14 @@
                 setTimeout(() => pollStatus(taskId), 15000);
             });
         }
+
+        // Enter to send
+        document.getElementById('promptInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                generateReport();
+            }
+        });
     </script>
 </body>
 </html>
