@@ -28,8 +28,10 @@ async def generate_report(req: ReportRequest):
         
     task_id = str(uuid.uuid4())
     def bg_task():
-        res = run_generation_pipeline(req.messages, req.persona, req.user_id, DATA_DIR)
-        tasks[task_id] = res
+        try:
+            tasks[task_id] = run_generation_pipeline(req.messages, req.persona, req.user_id, DATA_DIR)
+        except Exception as exc:
+            tasks[task_id] = {"error": f"Report generation failed: {exc}"}
         
     threading.Thread(target=bg_task).start()
     

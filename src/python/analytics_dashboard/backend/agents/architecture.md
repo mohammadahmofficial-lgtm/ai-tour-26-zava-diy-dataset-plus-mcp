@@ -2,7 +2,7 @@
 
 ## Overview
 
-This folder contains specialised AI agents that form a **Hub-and-Spoke** multi-agent system, supercharged by **Swarm Execution**, **LLM Self-Correction**, and **Recursive Task Subdivision**.
+This folder contains specialised AI agents that form a **Hub-and-Spoke** multi-agent system, supercharged by **result-driven investigation rounds**, **Swarm Execution**, **LLM Self-Correction**, and **Recursive Task Subdivision**.
 
 The **Security Agent** sits ABOVE the entire system as an overmind gatekeeper. It intercepts every prompt BEFORE the Orchestrator ever sees it. If the prompt is malicious or attempts privilege escalation, the Security Agent rejects it immediately.
 
@@ -54,7 +54,7 @@ flowchart TD
     Orchestrator -- "7. Outline Creation" --> Orchestrator
     Orchestrator -- "8. Generate Data Requirements" --> Orchestrator
     
-    Orchestrator -- "9. Dispatch Swarm Tasks" --> DataRetrieve
+    Orchestrator -- "9. Plan baseline tasks" --> DataRetrieve
     
     %% The Data Loop
     DataRetrieve -- "10. Execute SQL (Self-Correcting via <thought>)" --> MCP
@@ -63,20 +63,21 @@ flowchart TD
     Orchestrator -- "13. Dispatch Sub-tasks" --> DataRetrieve
     
     DataRetrieve -- "14. Synthesised Data" --> Orchestrator
+    Orchestrator -- "15. Plan next round from findings or stop" --> DataRetrieve
     
-    Orchestrator -- "15. Dispatch Analytics (With DB Metadata Context)" --> Analytics
+    Orchestrator -- "16. Dispatch Analytics (With DB Metadata Context)" --> Analytics
     
     %% The Analytics Loop
-    Analytics -- "16. Generate Tile (Max 4 Workers)" --> Analytics
-    Analytics -- "17. Inline Tile Validation (1 Retry)" --> Analytics
+    Analytics -- "17. Generate Tile (Max 4 Workers)" --> Analytics
+    Analytics -- "18. Inline Tile Validation (1 Retry)" --> Analytics
     
-    Analytics -- "18. UI Components JSON" --> Orchestrator
+    Analytics -- "19. UI Components JSON" --> Orchestrator
     
-    Orchestrator -- "19. Hand-off for Save" --> Write
-    Write -- "20. Final Audit" --> Security
-    Write -- "21. Write report.json" --> Disk
-    Write -- "22. Return GUID" --> API
-    API -- "23. Render Dashboard" --> User
+    Orchestrator -- "20. Hand-off for Save" --> Write
+    Write -- "21. Final Audit" --> Security
+    Write -- "22. Write report.json" --> Disk
+    Write -- "23. Return GUID" --> API
+    API -- "24. Render Dashboard" --> User
 ```
 
 ---
@@ -85,8 +86,10 @@ flowchart TD
 
 **Pattern Chosen:** Multi-Agent Hub and Spoke with Swarm execution, "Self-Correction at the Edge", and Recursive Task Subdivision.
 **Rationale:** 
-By placing the Orchestrator at the center (the Hub), we maintain strict control over the workflow. However, we avoid central bottlenecks by pushing execution to swarms:
-- **Swarm Data Retrieval:** Multiple Data Retrieve tasks execute in parallel to investigate different data facets concurrently via native `asyncio.gather`.
+By placing the Orchestrator at the center (the Hub), we maintain strict control over the workflow. The data investigation proceeds in bounded rounds:
+- **Result-Driven Investigation:** The Orchestrator first plans a baseline round, then sends the synthesized findings and completed tasks back to the planner. It selects focused follow-up analysis based on those findings, or stops when evidence is sufficient. The flow is capped at three rounds.
+- **Planner Output Validation:** Plans are checked for the required JSON shape; one corrective retry is allowed for an invalid response, and a second invalid response fails explicitly.
+- **Swarm Data Retrieval:** Independent Data Retrieve tasks within a round execute in parallel via native `asyncio.gather`; later rounds wait for and use the previous round's findings.
 - **Self-Correction at the Edge:** Instead of relying on a dedicated Validation agent, the Data Retrieve Agent is forced to emit a `<thought>` key in its JSON before acting. This forces the LLM to inspect schema columns and pre-flight its SQL before execution.
 - **Recursive Task Subdivision:** If a Data Retrieve agent struggles to write a valid query after 5 attempts, it actively returns a `request_subdivision` action. The Orchestrator will then break the complex task into 2-3 simpler sub-tasks and spawn a new swarm (up to a maximum depth of 2), preventing the pipeline from failing on difficult requests.
 - **Context-Aware Analytics:** The Orchestrator passes DB Metadata (accessible stores via RLS) down to the Analytics agent. The Analytics agent uses this context to determine if the user is a local store manager or Head Office, adapting its text summaries and chart types accordingly.

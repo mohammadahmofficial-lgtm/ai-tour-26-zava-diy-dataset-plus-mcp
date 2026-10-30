@@ -28,6 +28,11 @@ _SEMANTIC_MCP_SCRIPT = os.path.abspath(
 )
 
 _PROCESS_ERRORS = ("ProcessLookupError", "No such process", "TimeoutError", "deadline exceeded", "CancelledError")
+_SUPER_MANAGER_UUID = "00000000-0000-0000-0000-000000000000"
+PERMISSION_DENIED_MESSAGE = (
+    "We detected a store permission restriction, so report generation was stopped. "
+    "Please choose a store you can access or contact your administrator."
+)
 
 _SYSTEM_PROMPT_TEMPLATE = """\
 You are an autonomous Database Retrieval Agent. Your goal is to retrieve data that fulfills the specific task assigned to you.
@@ -117,6 +122,71 @@ def _query_includes_product_ids(query: str, product_ids: list[object]) -> bool:
         )
         for product_id in product_ids
     )
+
+
+def _extract_database_error(output: str) -> str | None:
+    """Return a structured database error from an MCP query result, if present."""
+    _, separator, payload_text = output.partition("\n")
+    if not separator:
+        return None
+
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return None
+
+    error = payload.get("error") if isinstance(payload, dict) else None
+    return error if isinstance(error, str) else None
+
+
+def _is_permission_denied(error: str) -> bool:
+    """Recognize explicit PostgreSQL permission failures without treating empty results as errors."""
+    normalized = error.casefold()
+    return any(
+        marker in normalized
+        for marker in (
+            "permission denied",
+            "insufficient privilege",
+            "not authorized",
+            "unauthorized",
+            "access denied",
+            "sqlstate 42501",
+            "42501",
+        )
+    )
+
+
+def _parse_store_access(output: str, rls_user_id: str) -> tuple[list[dict], list[str]]:
+    """Parse store ownership internally and return records plus RLS-accessible names."""
+    _, separator, payload_text = output.partition("\n")
+    if not separator:
+        raise RuntimeError("Store access query returned an unexpected response.")
+
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Store access query returned invalid JSON.") from exc
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Store access query returned an unexpected response.")
+    if payload.get("error"):
+        raise RuntimeError(f"Store access query failed: {payload['error']}")
+
+    records = payload.get("results")
+    if not isinstance(records, list):
+        raise RuntimeError("Store access query did not return store records.")
+    accessible_store_names: list[str] = []
+    for record in records:
+        if not isinstance(record, dict):
+            raise RuntimeError("Store access query returned an invalid store record.")
+        store_name = record.get("store_name")
+        store_owner_id = record.get("rls_user_id")
+        if not isinstance(store_name, str) or not isinstance(store_owner_id, str):
+            raise RuntimeError("Store access query omitted store ownership information.")
+        if rls_user_id == _SUPER_MANAGER_UUID or store_owner_id == rls_user_id:
+            accessible_store_names.append(store_name)
+
+    return records, accessible_store_names
 
 
 async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
@@ -244,6 +314,21 @@ async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
                     messages.append({"role": "user", "content": f"Error executing query: {e}"})
                 continue
 
+            database_error = _extract_database_error(output)
+            if database_error:
+                if _is_permission_denied(database_error):
+                    print("[DataRetrieveAgent] Permission denied; stopping this retrieval task.")
+                    return {
+                        "status": "permission_denied",
+                        "data": PERMISSION_DENIED_MESSAGE,
+                        "queries": approved_queries,
+                    }
+                messages.append({
+                    "role": "user",
+                    "content": f"Database query failed: {database_error}. Correct the query or finish if no valid query can answer the task.",
+                })
+                continue
+
             if len(output) > 20_000:
                 truncated = (
                     output[:20_000]
@@ -274,7 +359,7 @@ async def run_mcp_loop(task: str, rls_user_id: str, context: str = "") -> dict:
     }
 
 
-async def run_fetch_metadata(rls_user_id: str) -> str:
+async def run_fetch_metadata(rls_user_id: str) -> tuple[str, list[str], list[str]]:
     """Fetch all table schemas and the RLS-filtered store list in a single MCP session."""
     server_params = StdioServerParameters(
         command="python",
@@ -299,14 +384,24 @@ async def run_fetch_metadata(rls_user_id: str) -> str:
             print("[DataRetrieveAgent] Fetching accessible stores (RLS filtered)…")
             store_result = await session.call_tool(
                 "execute_sales_query",
-                arguments={"postgresql_query": "SELECT store_id, store_name FROM retail.stores ORDER BY store_id;"},
+                arguments={"postgresql_query": "SELECT store_id, store_name, rls_user_id::text AS rls_user_id FROM retail.stores ORDER BY store_id;"},
             )
-            store_output = store_result.content[0].text if store_result.content else "None"
+            store_output = store_result.content[0].text if store_result.content else ""
 
-        return (
+        store_records, accessible_store_names = _parse_store_access(store_output, rls_user_id)
+        all_store_names = [record["store_name"] for record in store_records]
+        accessible_store_records = [
+            {"store_id": record["store_id"], "store_name": record["store_name"]}
+            for record in store_records
+            if record["store_name"] in accessible_store_names
+        ]
+        store_output = json.dumps(accessible_store_records, indent=2)
+
+        metadata = (
             f"=== ACCESSIBLE STORES FOR THIS USER (RLS FILTERED) ===\n{store_output}\n\n"
             f"=== DATABASE SCHEMAS ===\n{schema_output}"
         )
+        return metadata, all_store_names, accessible_store_names
     finally:
         with contextlib.redirect_stderr(io.StringIO()):
             try:
@@ -324,6 +419,6 @@ def fetch_data(task: str, rls_user_id: str) -> dict:
     return asyncio.run(run_mcp_loop(task, rls_user_id))
 
 
-def fetch_metadata(rls_user_id: str) -> str:
+def fetch_metadata(rls_user_id: str) -> tuple[str, list[str], list[str]]:
     """Synchronous wrapper around run_fetch_metadata."""
     return asyncio.run(run_fetch_metadata(rls_user_id))
